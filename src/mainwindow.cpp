@@ -123,10 +123,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_darkMode = QSettings().value("ui/darkMode", false).toBool();
 
     QSettings s;
-    m_interfaceFont = qApp->font();
+    m_defaultInterfaceFont = qApp->font();
+    m_defaultEditorFont = QFont("monospace", 11);   // monospaced editor/dock default
+    m_interfaceFont = m_defaultInterfaceFont;
     if (const QString f = s.value("ui/interfaceFont").toString(); !f.isEmpty())
         m_interfaceFont.fromString(f);
-    m_editorFont = QFont("monospace", 11);     // monospaced editor/dock default
+    m_editorFont = m_defaultEditorFont;
     if (const QString f = s.value("ui/editorFont").toString(); !f.isEmpty())
         m_editorFont.fromString(f);
 
@@ -438,8 +440,10 @@ void MainWindow::openSettings()
         return QStringLiteral("%1 %2").arg(f.family()).arg(f.pointSize());
     };
 
-    // A label + "Change..." button bound to a font; updates the working copy.
+    // A label + "Change..."/"Reset" buttons bound to a font; updates the working
+    // copy. "Reset" restores the startup default captured for that font.
     auto addFontRow = [&](const QString &caption, QFont *target,
+                          const QFont &defaultFont,
                           QFontDialog::FontDialogOptions opts) {
         auto *row = new QHBoxLayout;
         row->addWidget(new QLabel(caption, &dlg));
@@ -448,18 +452,31 @@ void MainWindow::openSettings()
         row->addWidget(value, 1);
         auto *btn = new QPushButton(tr("Change..."), &dlg);
         row->addWidget(btn);
+        auto *reset = new QPushButton(tr("Reset"), &dlg);
+        row->addWidget(reset);
         layout->addLayout(row);
         connect(btn, &QPushButton::clicked, &dlg, [&dlg, target, value, describe, opts] {
             bool ok = false;
-            const QFont f = QFontDialog::getFont(&ok, *target, &dlg, QString(), opts);
-            if (ok) { *target = f; value->setText(describe(f)); }
+            QFont f = QFontDialog::getFont(&ok, *target, &dlg, QString(), opts);
+            if (!ok) return;
+            // Qt >= 5.13 QFontDialog returns the chosen face via setFamilies();
+            // family()/toString() then report the *default* family, so Scintilla
+            // would keep its old face (only the size would change). Copy the real
+            // family back into the legacy slot so family()/toString() are correct.
+            if (!f.families().isEmpty()) f.setFamily(f.families().constFirst());
+            *target = f;
+            value->setText(describe(f));
+        });
+        connect(reset, &QPushButton::clicked, &dlg, [target, value, describe, defaultFont] {
+            *target = defaultFont;
+            value->setText(describe(defaultFont));
         });
     };
 
     addFontRow(tr("Interface font (menus, titles):"), &interfaceFont,
-               QFontDialog::FontDialogOptions());
+               m_defaultInterfaceFont, QFontDialog::FontDialogOptions());
     addFontRow(tr("Editor && dock font:"), &editorFont,
-               QFontDialog::MonospacedFonts);   // preselect fixed-width faces
+               m_defaultEditorFont, QFontDialog::MonospacedFonts);   // fixed-width
 
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);

@@ -56,7 +56,11 @@ void applyAdaLexer(QsciScintilla *e, const QFont &baseFont, bool dark)
     // per-syntax foregrounds below override just the text colour.
     const QColor bg = dark ? QColor("#1e1e1e") : QColor("#ffffff");
     const QColor fg = dark ? QColor("#d4d4d4") : QColor("#000000");
-    const QByteArray fam = baseFont.family().toUtf8();
+    // Resolve the face name robustly: a QFont from QFontDialog (Qt >= 5.13)
+    // carries the chosen family in families(), not family().
+    const QString familyName = baseFont.families().isEmpty()
+        ? baseFont.family() : baseFont.families().constFirst();
+    const QByteArray fam = familyName.toUtf8();
     e->SendScintilla(QsciScintilla::SCI_STYLESETFONT,
                      (unsigned long)QsciScintilla::STYLE_DEFAULT, fam.constData());
     set(QsciScintilla::SCI_STYLESETSIZE, QsciScintilla::STYLE_DEFAULT, baseFont.pointSize());

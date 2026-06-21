@@ -201,6 +201,9 @@ private:
     // Fonts. The interface font drives the app chrome (menus, titles, dialogs);
     // the editor font (monospaced by default) is forced onto the editors and the
     // dock content widgets so they stay fixed-width regardless of interface font.
+    // The defaults are captured at startup so Settings can reset to them.
+    QFont m_defaultInterfaceFont;
+    QFont m_defaultEditorFont;
     QFont m_interfaceFont;
     QFont m_editorFont;
 };
