@@ -43,16 +43,8 @@ Project Project::makeDefault()
     esp.gdbRemote          = "localhost:3333";
     esp.initBreakpoint     = "app_main";
 
-    TargetProfile host;
-    host.name          = "Host (GNAT)";
-    host.description   = "Native build/run on this machine";
-    host.buildCommand  = "gnatmake {file}";
-    host.runCommand    = "{exe}";
-    host.gdbCommand    = "gdb";
-    host.gdbProgram    = "{exe}";
-    host.initBreakpoint = "main";
-
-    p.targets = { esp, host };
+    // This editor targets the ESP32-S3 only; a single fixed profile.
+    p.targets = { esp };
     p.activeIndex = 0;
     p.dirty = false;
     return p;

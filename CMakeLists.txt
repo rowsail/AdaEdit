@@ -31,7 +31,6 @@ add_executable(adaedit
     src/mainwindow.cpp
     src/adalexer.cpp
     src/project.cpp
-    src/targetdialog.cpp
     src/debugger.cpp
     src/lspclient.cpp
 )

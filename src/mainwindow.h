@@ -13,7 +13,6 @@
 class QTabWidget;
 class QDockWidget;
 class QPlainTextEdit;
-class QComboBox;
 class QTreeView;
 class QFileSystemModel;
 class QLineEdit;
@@ -67,15 +66,13 @@ private slots:
     void searchAgain();
     void gotoLine();
 
-    // Project / targets
+    // Project
     void newProject();
     void openProject();
     bool saveProject();
     bool saveProjectAs();
-    void manageTargets();
-    void onTargetChanged(int index);
 
-    // Actions (per active target)
+    // Actions (ESP32-S3 target)
     void doBuild();
     void doFlash();
     void doRun();
@@ -144,10 +141,9 @@ private:
     void applyTheme();                       // app palette + all editors
     void applyEditorTheme(QsciScintilla *e); // QScintilla colours (not palette-driven)
     void applyFonts();                        // interface font + editor/dock font
-    void createTargetBar();
+    void createActionBar();
     void createDebugBar();
     void createDocks();
-    void refreshTargetBar();
     void updateDebugActions();
     void startDebugSession(bool attach);
 
@@ -159,9 +155,9 @@ private:
     QTabWidget *m_tabs = nullptr;
     QList<QDockWidget *> m_docks;         // all docks, for the View menu toggles
     QPlainTextEdit *m_output = nullptr;
+    // (no target picker: this editor is ESP32-S3-only)
     QPlainTextEdit *m_debugConsole = nullptr;
     QLineEdit *m_debugInput = nullptr;
-    QComboBox *m_targetCombo = nullptr;
     QListWidget *m_bpList = nullptr;
     QTreeWidget *m_varsTree = nullptr;
     QTreeWidgetItem *m_localsRoot = nullptr;

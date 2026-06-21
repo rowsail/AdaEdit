@@ -1,6 +1,5 @@
 #include "mainwindow.h"
 #include "adalexer.h"
-#include "targetdialog.h"
 #include "debugger.h"
 #include "lspclient.h"
 
@@ -156,9 +155,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     createDocks();
     createMenus();
-    createTargetBar();
+    createActionBar();
     createDebugBar();
-    refreshTargetBar();
     updateDebugActions();
 
     resize(1200, 800);
@@ -399,8 +397,6 @@ void MainWindow::createMenus()
     project->addAction(tr("&Open project..."), this, &MainWindow::openProject);
     project->addAction(tr("&Save project"), this, &MainWindow::saveProject);
     project->addAction(tr("Save project &as..."), this, &MainWindow::saveProjectAs);
-    project->addSeparator();
-    project->addAction(tr("&Manage targets..."), this, &MainWindow::manageTargets);
 
     QMenu *build = menuBar()->addMenu(tr("&Build"));
     build->addAction(tr("&Build"), this, &MainWindow::doBuild, QKeySequence(Qt::CTRL | Qt::Key_F9));
@@ -599,17 +595,12 @@ void MainWindow::applyFonts()
             applyEditorTheme(e);     // re-applies the lexer with m_editorFont
 }
 
-void MainWindow::createTargetBar()
+void MainWindow::createActionBar()
 {
-    auto *bar = addToolBar(tr("Target"));
+    // ESP32-S3 build actions. (This editor targets the ESP32-S3 only, so there
+    // is no target picker — the commands come from the single fixed profile.)
+    auto *bar = addToolBar(tr("Actions"));
     bar->setMovable(false);
-    bar->addWidget(new QLabel(tr("Target: "), bar));
-    m_targetCombo = new QComboBox(bar);
-    m_targetCombo->setMinimumWidth(220);
-    connect(m_targetCombo, qOverload<int>(&QComboBox::activated),
-            this, &MainWindow::onTargetChanged);
-    bar->addWidget(m_targetCombo);
-    bar->addSeparator();
     bar->addAction(tr("Build"), this, &MainWindow::doBuild);
     bar->addAction(tr("Flash"), this, &MainWindow::doFlash);
     bar->addAction(tr("Run"), this, &MainWindow::doRun);
@@ -625,21 +616,6 @@ void MainWindow::createDebugBar()
         bar->addAction(a);
     bar->addSeparator();
     bar->addAction(m_actSmp);
-}
-
-void MainWindow::refreshTargetBar()
-{
-    QSignalBlocker block(m_targetCombo);
-    m_targetCombo->clear();
-    for (const auto &t : m_project.targets) {
-        const QString label = t.description.isEmpty()
-            ? t.name : QStringLiteral("%1 — %2").arg(t.name, t.description);
-        m_targetCombo->addItem(label);
-    }
-    if (m_project.activeIndex >= 0 && m_project.activeIndex < m_project.targets.size())
-        m_targetCombo->setCurrentIndex(m_project.activeIndex);
-    updateTitle();
-    updateDebugActions();
 }
 
 // ---- File / folder -------------------------------------------------------
@@ -705,7 +681,8 @@ void MainWindow::openFolderPath(const QString &path)
             statusBar()->showMessage(tr("Loaded project %1").arg(proj), 3000);
     }
     m_project.rootPath = path;             // load() doesn't set rootPath
-    refreshTargetBar();
+    updateTitle();
+    updateDebugActions();
     setWindowFilePath(path);
     QSettings().setValue("lastFolder", path);
     statusBar()->showMessage(tr("Opened folder %1").arg(path), 3000);
@@ -1151,7 +1128,8 @@ void MainWindow::onProblemActivated(QListWidgetItem *item)
 void MainWindow::newProject()
 {
     m_project = Project::makeDefault();
-    refreshTargetBar();
+    updateTitle();
+    updateDebugActions();
     statusBar()->showMessage(tr("New project"), 3000);
 }
 
@@ -1168,7 +1146,8 @@ void MainWindow::openProject()
     }
     if (m_project.rootPath.isEmpty())
         m_project.rootPath = QFileInfo(path).absolutePath();
-    refreshTargetBar();
+    updateTitle();
+    updateDebugActions();
     statusBar()->showMessage(tr("Opened %1").arg(path), 3000);
 }
 
@@ -1203,24 +1182,6 @@ bool MainWindow::saveProjectAs()
     }
     statusBar()->showMessage(tr("Project saved to %1").arg(path), 3000);
     return true;
-}
-
-void MainWindow::manageTargets()
-{
-    TargetDialog dlg(m_project.targets, this);
-    if (dlg.exec() != QDialog::Accepted) return;
-    m_project.targets = dlg.result();
-    if (m_project.activeIndex >= m_project.targets.size())
-        m_project.activeIndex = m_project.targets.isEmpty() ? -1 : 0;
-    m_project.dirty = true;
-    refreshTargetBar();
-}
-
-void MainWindow::onTargetChanged(int index)
-{
-    m_project.setActive(index);
-    updateTitle();
-    updateDebugActions();
 }
 
 // ---- Actions (build/flash/run/monitor) -----------------------------------
