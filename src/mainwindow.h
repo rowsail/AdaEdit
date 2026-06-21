@@ -14,6 +14,7 @@
 class QTabWidget;
 class QDockWidget;
 class QPlainTextEdit;
+class QComboBox;
 class QTreeView;
 class QFileSystemModel;
 class QLineEdit;
@@ -90,6 +91,7 @@ private slots:
     void openProject();
     bool saveProject();
     bool saveProjectAs();
+    void onProfileChanged(int index);
 
     // Actions (ESP32-S3 target)
     void doBuild();
@@ -171,6 +173,13 @@ private:
     void updateDebugActions();
     void startDebugSession(bool attach);
 
+    // Ada runtime profile (light-tasking/embedded/full), stored as
+    // `Profile := "...";` in the project .gpr and exported as ADA_PROFILE.
+    void loadProfileFromGpr();            // .gpr -> combo
+    bool writeGprProfile(const QString &value);   // combo -> .gpr (+ open tab)
+    QString gprText() const;              // current .gpr text (open buffer or disk)
+    QString gprProfileValue() const;      // parse the Profile assignment
+
     CmdContext ctxForCurrent() const;
     void runAction(const QString &cmdTemplate, const QString &what);
     void showDebugLine(const QString &fullPath, int line);
@@ -179,6 +188,9 @@ private:
     QTabWidget *m_tabs = nullptr;
     QList<QDockWidget *> m_docks;         // all docks, for the View menu toggles
     QList<Command> m_commands;            // all rebindable commands (keyboard map)
+    QComboBox *m_profileCombo = nullptr;  // Ada runtime profile selector
+    QString m_gprPath;                    // .gpr holding the Profile assignment
+    QString m_profile;                    // current profile value (for ADA_PROFILE)
     QPlainTextEdit *m_output = nullptr;
     // (no target picker: this editor is ESP32-S3-only)
     QPlainTextEdit *m_debugConsole = nullptr;
