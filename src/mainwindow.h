@@ -1,6 +1,7 @@
 #pragma once
 #include <QMainWindow>
 #include <QFont>
+#include <QKeySequence>
 #include <QPalette>
 #include <QString>
 #include <QStringList>
@@ -24,6 +25,15 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class QsciScintilla;
 class LspClient;
+
+// A user-rebindable command: a menu/toolbar QAction plus the identity and
+// default key sequence used by the Keyboard Shortcuts editor and QSettings.
+struct Command {
+    QString id;                 // stable key, e.g. "file.save"
+    QString name;              // human label (menu text, sans '&')
+    QKeySequence defaultSeq;    // factory default shortcut
+    QAction *action = nullptr;
+};
 
 // AdaEdit main window: a folder-rooted project explorer, tabbed Ada editors,
 // configurable per-target actions (build/flash/run/monitor) and an in-editor
@@ -52,6 +62,10 @@ private slots:
     bool saveFileAs();
     void closeTab(int index);
     void openSettings();
+    void openShortcuts();
+    void formatCurrent();
+    void toggleBreakpointAtCursor();
+    void addWatchDialog();
 
     // Edit
     void undo();
@@ -138,6 +152,11 @@ private:
     QString editorPath(QsciScintilla *e) const;
 
     void createMenus();
+    // Register a menu/toolbar action as a rebindable command and apply its
+    // stored-or-default shortcut.
+    void registerCmd(QAction *a, const QString &id,
+                     const QKeySequence &def = QKeySequence());
+    QKeySequence shortcutFor(const QString &id, const QKeySequence &def) const;
     void applyTheme();                       // app palette + all editors
     void applyEditorTheme(QsciScintilla *e); // QScintilla colours (not palette-driven)
     void applyFonts();                        // interface font + editor/dock font
@@ -154,6 +173,7 @@ private:
 
     QTabWidget *m_tabs = nullptr;
     QList<QDockWidget *> m_docks;         // all docks, for the View menu toggles
+    QList<Command> m_commands;            // all rebindable commands (keyboard map)
     QPlainTextEdit *m_output = nullptr;
     // (no target picker: this editor is ESP32-S3-only)
     QPlainTextEdit *m_debugConsole = nullptr;

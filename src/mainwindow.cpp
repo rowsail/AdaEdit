@@ -350,25 +350,42 @@ QsciScintilla *MainWindow::openOrActivate(const QString &path)
 
 void MainWindow::createMenus()
 {
+    // Every shortcut-bearing action is registered as a rebindable Command via
+    // registerCmd(action, id, default). Defaults: modern conventions for the
+    // general/editor commands, Borland Turbo C/C++ keys for build/debug.
     QMenu *file = menuBar()->addMenu(tr("&File"));
-    file->addAction(tr("&New"), this, &MainWindow::newFile, QKeySequence::New);
-    file->addAction(tr("&Open file..."), this, &MainWindow::openFile, QKeySequence(Qt::Key_F3));
-    file->addAction(tr("Open &folder..."), this, &MainWindow::openFolder,
-                    QKeySequence(Qt::CTRL | Qt::Key_K, Qt::CTRL | Qt::Key_O));
-    file->addAction(tr("&Save"), this, &MainWindow::saveFile, QKeySequence(Qt::Key_F2));
-    file->addAction(tr("Save &as..."), this, &MainWindow::saveFileAs, QKeySequence::SaveAs);
+    registerCmd(file->addAction(tr("&New"), this, &MainWindow::newFile),
+                "file.new", QKeySequence::New);
+    registerCmd(file->addAction(tr("&Open file..."), this, &MainWindow::openFile),
+                "file.openFile", QKeySequence::Open);
+    registerCmd(file->addAction(tr("Open &folder..."), this, &MainWindow::openFolder),
+                "file.openFolder", QKeySequence(Qt::CTRL | Qt::Key_K, Qt::CTRL | Qt::Key_O));
+    registerCmd(file->addAction(tr("&Save"), this, &MainWindow::saveFile),
+                "file.save", QKeySequence::Save);
+    registerCmd(file->addAction(tr("Save &as..."), this, &MainWindow::saveFileAs),
+                "file.saveAs", QKeySequence::SaveAs);
     file->addSeparator();
-    file->addAction(tr("Se&ttings..."), this, &MainWindow::openSettings);
+    registerCmd(file->addAction(tr("Se&ttings..."), this, &MainWindow::openSettings),
+                "file.settings");
     file->addSeparator();
-    file->addAction(tr("E&xit"), this, &QWidget::close, QKeySequence(Qt::ALT | Qt::Key_X));
+    registerCmd(file->addAction(tr("E&xit"), this, &QWidget::close),
+                "file.exit", QKeySequence(Qt::CTRL | Qt::Key_Q));
 
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
-    edit->addAction(tr("&Undo"), this, &MainWindow::undo, QKeySequence::Undo);
-    edit->addAction(tr("&Redo"), this, &MainWindow::redo, QKeySequence::Redo);
+    registerCmd(edit->addAction(tr("&Undo"), this, &MainWindow::undo),
+                "edit.undo", QKeySequence::Undo);
+    registerCmd(edit->addAction(tr("&Redo"), this, &MainWindow::redo),
+                "edit.redo", QKeySequence(Qt::CTRL | Qt::Key_Y));
     edit->addSeparator();
-    edit->addAction(tr("Cu&t"), this, &MainWindow::cut, QKeySequence(Qt::SHIFT | Qt::Key_Delete));
-    edit->addAction(tr("&Copy"), this, &MainWindow::copy, QKeySequence(Qt::CTRL | Qt::Key_Insert));
-    edit->addAction(tr("&Paste"), this, &MainWindow::paste, QKeySequence(Qt::SHIFT | Qt::Key_Insert));
+    registerCmd(edit->addAction(tr("Cu&t"), this, &MainWindow::cut),
+                "edit.cut", QKeySequence::Cut);
+    registerCmd(edit->addAction(tr("&Copy"), this, &MainWindow::copy),
+                "edit.copy", QKeySequence::Copy);
+    registerCmd(edit->addAction(tr("&Paste"), this, &MainWindow::paste),
+                "edit.paste", QKeySequence::Paste);
+    edit->addSeparator();
+    registerCmd(edit->addAction(tr("&Format (Ada)"), this, &MainWindow::formatCurrent),
+                "edit.format", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
 
     // View: one checkable entry per dock. QDockWidget::toggleViewAction() is
     // already checkable, shows/hides the dock, and unticks itself when the dock
@@ -378,54 +395,105 @@ void MainWindow::createMenus()
         view->addAction(dock->toggleViewAction());
 
     QMenu *search = menuBar()->addMenu(tr("&Search"));
-    search->addAction(tr("&Find..."), this, &MainWindow::find,
-                      QKeySequence(Qt::CTRL | Qt::Key_Q, Qt::Key_F));
-    search->addAction(tr("&Replace..."), this, &MainWindow::replace,
-                      QKeySequence(Qt::CTRL | Qt::Key_Q, Qt::Key_A));
-    search->addAction(tr("Search &again"), this, &MainWindow::searchAgain,
-                      QKeySequence(Qt::CTRL | Qt::Key_L));
-    search->addAction(tr("&Go to line..."), this, &MainWindow::gotoLine,
-                      QKeySequence(Qt::CTRL | Qt::Key_J));
+    registerCmd(search->addAction(tr("&Find..."), this, &MainWindow::find),
+                "search.find", QKeySequence::Find);
+    registerCmd(search->addAction(tr("&Replace..."), this, &MainWindow::replace),
+                "search.replace", QKeySequence(Qt::CTRL | Qt::Key_H));
+    registerCmd(search->addAction(tr("Find &next"), this, &MainWindow::searchAgain),
+                "search.findNext", QKeySequence::FindNext);
+    registerCmd(search->addAction(tr("&Go to line..."), this, &MainWindow::gotoLine),
+                "search.gotoLine", QKeySequence(Qt::CTRL | Qt::Key_G));
     search->addSeparator();
-    search->addAction(tr("Go to &definition"), this, &MainWindow::gotoDefinitionAtCursor,
-                      QKeySequence(Qt::Key_F12));
-    search->addAction(tr("&Complete"), this, &MainWindow::triggerCompletion,
-                      QKeySequence(Qt::CTRL | Qt::Key_Space));
+    registerCmd(search->addAction(tr("Go to &definition"), this, &MainWindow::gotoDefinitionAtCursor),
+                "search.gotoDefinition", QKeySequence(Qt::Key_F12));
+    registerCmd(search->addAction(tr("&Complete"), this, &MainWindow::triggerCompletion),
+                "search.complete", QKeySequence(Qt::CTRL | Qt::Key_Space));
 
     QMenu *project = menuBar()->addMenu(tr("&Project"));
-    project->addAction(tr("&New project"), this, &MainWindow::newProject);
-    project->addAction(tr("&Open project..."), this, &MainWindow::openProject);
-    project->addAction(tr("&Save project"), this, &MainWindow::saveProject);
-    project->addAction(tr("Save project &as..."), this, &MainWindow::saveProjectAs);
+    registerCmd(project->addAction(tr("&New project"), this, &MainWindow::newProject), "project.new");
+    registerCmd(project->addAction(tr("&Open project..."), this, &MainWindow::openProject), "project.open");
+    registerCmd(project->addAction(tr("&Save project"), this, &MainWindow::saveProject), "project.save");
+    registerCmd(project->addAction(tr("Save project &as..."), this, &MainWindow::saveProjectAs), "project.saveAs");
 
     QMenu *build = menuBar()->addMenu(tr("&Build"));
-    build->addAction(tr("&Build"), this, &MainWindow::doBuild, QKeySequence(Qt::CTRL | Qt::Key_F9));
-    build->addAction(tr("&Flash"), this, &MainWindow::doFlash, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F9));
-    build->addAction(tr("&Run"), this, &MainWindow::doRun, QKeySequence(Qt::Key_F9));
-    build->addAction(tr("&Monitor"), this, &MainWindow::doMonitor, QKeySequence(Qt::CTRL | Qt::Key_M));
+    registerCmd(build->addAction(tr("&Build"), this, &MainWindow::doBuild),
+                "build.build", QKeySequence(Qt::Key_F9));                       // Borland Make
+    registerCmd(build->addAction(tr("&Flash"), this, &MainWindow::doFlash),
+                "build.flash", QKeySequence(Qt::ALT | Qt::Key_F9));             // ~Borland Compile
+    registerCmd(build->addAction(tr("&Run"), this, &MainWindow::doRun),
+                "build.run", QKeySequence(Qt::SHIFT | Qt::Key_F9));
+    registerCmd(build->addAction(tr("&Monitor"), this, &MainWindow::doMonitor),
+                "build.monitor", QKeySequence(Qt::ALT | Qt::Key_F5));           // ~Borland User screen
 
     QMenu *debug = menuBar()->addMenu(tr("&Debug"));
-    m_actStart    = debug->addAction(tr("Start &debugging"), this, &MainWindow::debugStart,
-                                     QKeySequence(Qt::Key_F5));
+    m_actStart    = debug->addAction(tr("Start &debugging"), this, &MainWindow::debugStart);
+    registerCmd(m_actStart, "debug.start", QKeySequence(Qt::Key_F5));
     m_actAttach   = debug->addAction(tr("&Attach (post-mortem)"), this, &MainWindow::debugAttach);
     m_actAttach->setToolTip(tr("Connect and halt in place (no reset / no run-to-app_main)"));
-    m_actContinue = debug->addAction(tr("&Continue"), this, &MainWindow::debugContinue,
-                                     QKeySequence(Qt::CTRL | Qt::Key_F5));
-    m_actStepOver = debug->addAction(tr("Step &over"), this, &MainWindow::debugStepOver,
-                                     QKeySequence(Qt::Key_F10));
-    m_actStepInto = debug->addAction(tr("Step &into"), this, &MainWindow::debugStepInto,
-                                     QKeySequence(Qt::Key_F11));
-    m_actPause    = debug->addAction(tr("&Pause"), this, &MainWindow::debugPause,
-                                     QKeySequence(Qt::Key_F6));
-    m_actRestart  = debug->addAction(tr("&Restart"), this, &MainWindow::debugRestart,
-                                     QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F5));
-    m_actStop     = debug->addAction(tr("S&top debugging"), this, &MainWindow::debugStop,
-                                     QKeySequence(Qt::SHIFT | Qt::Key_F5));
+    registerCmd(m_actAttach, "debug.attach");
+    m_actContinue = debug->addAction(tr("&Continue"), this, &MainWindow::debugContinue);
+    registerCmd(m_actContinue, "debug.continue", QKeySequence(Qt::CTRL | Qt::Key_F9));   // Borland Run/Go
+    m_actStepOver = debug->addAction(tr("Step &over"), this, &MainWindow::debugStepOver);
+    registerCmd(m_actStepOver, "debug.stepOver", QKeySequence(Qt::Key_F8));              // Borland
+    m_actStepInto = debug->addAction(tr("Step &into"), this, &MainWindow::debugStepInto);
+    registerCmd(m_actStepInto, "debug.stepInto", QKeySequence(Qt::Key_F7));              // Borland
+    m_actPause    = debug->addAction(tr("&Pause"), this, &MainWindow::debugPause);
+    registerCmd(m_actPause, "debug.pause", QKeySequence(Qt::CTRL | Qt::Key_F6));
+    m_actRestart  = debug->addAction(tr("&Restart"), this, &MainWindow::debugRestart);
+    registerCmd(m_actRestart, "debug.restart", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F2));
+    m_actStop     = debug->addAction(tr("S&top debugging"), this, &MainWindow::debugStop);
+    registerCmd(m_actStop, "debug.stop", QKeySequence(Qt::CTRL | Qt::Key_F2));           // Borland reset
+    debug->addSeparator();
+    registerCmd(debug->addAction(tr("Toggle &breakpoint"), this, &MainWindow::toggleBreakpointAtCursor),
+                "debug.toggleBreakpoint", QKeySequence(Qt::CTRL | Qt::Key_F8));          // Borland
+    registerCmd(debug->addAction(tr("Add &watch..."), this, &MainWindow::addWatchDialog),
+                "debug.addWatch", QKeySequence(Qt::CTRL | Qt::Key_F7));                  // Borland
     debug->addSeparator();
     m_actSmp = debug->addAction(tr("&Dual-core (SMP)"));
     m_actSmp->setCheckable(true);
     m_actSmp->setToolTip(tr("Debug both LX7 cores as gdb threads (applies on next Start)"));
     connect(m_actSmp, &QAction::toggled, this, &MainWindow::onSmpToggled);
+}
+
+void MainWindow::registerCmd(QAction *a, const QString &id, const QKeySequence &def)
+{
+    a->setObjectName(id);
+    a->setShortcut(shortcutFor(id, def));
+    m_commands.append({id, QString(a->text()).remove('&'), def, a});
+}
+
+QKeySequence MainWindow::shortcutFor(const QString &id, const QKeySequence &def) const
+{
+    // An explicit stored value wins (even if empty = "no shortcut"); otherwise
+    // the factory default is used.
+    QSettings s;
+    const QString key = "shortcuts/" + id;
+    if (s.contains(key)) return QKeySequence(s.value(key).toString());
+    return def;
+}
+
+void MainWindow::formatCurrent()
+{
+    if (QsciScintilla *e = currentEditor()) requestFormat(e);
+}
+
+void MainWindow::toggleBreakpointAtCursor()
+{
+    if (QsciScintilla *e = currentEditor()) {
+        int line, index;
+        e->getCursorPosition(&line, &index);
+        toggleBreakpoint(e, line);
+    }
+}
+
+void MainWindow::addWatchDialog()
+{
+    bool ok = false;
+    const QString expr = QInputDialog::getText(this, tr("Add watch"),
+        tr("Watch expression:"), QLineEdit::Normal, QString(), &ok).trimmed();
+    if (!ok || expr.isEmpty()) return;
+    m_watchInput->setText(expr);
+    onAddWatch();                 // reuse: records the watch + evaluates if stopped
 }
 
 // ---- Settings / appearance ----------------------------------------------
@@ -486,6 +554,11 @@ void MainWindow::openSettings()
     addFontRow(tr("Editor && dock font:"), &editorFont,
                m_defaultEditorFont, QFontDialog::MonospacedFonts);   // fixed-width
 
+    // Keyboard shortcuts open their own editor (committed independently of OK).
+    auto *keysBtn = new QPushButton(tr("Keyboard shortcuts..."), &dlg);
+    connect(keysBtn, &QPushButton::clicked, &dlg, [this] { openShortcuts(); });
+    layout->addWidget(keysBtn);
+
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     layout->addWidget(buttons);
@@ -507,6 +580,87 @@ void MainWindow::openSettings()
         s.setValue("ui/editorFont", m_editorFont.toString());
         applyFonts();
     }
+}
+
+// Keyboard Shortcuts editor: a row per command with a QKeySequenceEdit to
+// capture a new binding and a per-row "Default" button; conflicts are blocked
+// on OK. Changes persist to QSettings and apply to the live actions.
+void MainWindow::openShortcuts()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Keyboard Shortcuts"));
+    dlg.resize(560, 600);
+    auto *layout = new QVBoxLayout(&dlg);
+
+    auto *table = new QTableWidget(m_commands.size(), 3, &dlg);
+    table->setHorizontalHeaderLabels({tr("Command"), tr("Shortcut"), QString()});
+    table->verticalHeader()->setVisible(false);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    table->setColumnWidth(1, 170);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    QList<QKeySequenceEdit *> editors;
+    for (int row = 0; row < m_commands.size(); ++row) {
+        const Command &c = m_commands[row];
+        auto *name = new QTableWidgetItem(c.name);
+        name->setFlags(name->flags() & ~Qt::ItemIsEditable);
+        table->setItem(row, 0, name);
+
+        auto *edit = new QKeySequenceEdit(c.action->shortcut(), table);
+        editors.append(edit);
+        table->setCellWidget(row, 1, edit);
+
+        auto *def = new QPushButton(tr("Default"), table);
+        def->setToolTip(c.defaultSeq.isEmpty() ? tr("(none)")
+                                               : c.defaultSeq.toString(QKeySequence::NativeText));
+        connect(def, &QPushButton::clicked, edit,
+                [edit, seq = c.defaultSeq] { edit->setKeySequence(seq); });
+        table->setCellWidget(row, 2, def);
+    }
+    layout->addWidget(table);
+
+    auto *resetAll = new QPushButton(tr("Restore all defaults"), &dlg);
+    connect(resetAll, &QPushButton::clicked, &dlg, [this, &editors] {
+        for (int i = 0; i < editors.size(); ++i)
+            editors[i]->setKeySequence(m_commands[i].defaultSeq);
+    });
+    layout->addWidget(resetAll);
+
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, [this, &dlg, &editors] {
+        // Reject duplicate (non-empty) bindings before committing anything.
+        QHash<QString, QString> seen;          // sequence text -> command name
+        for (int i = 0; i < editors.size(); ++i) {
+            const QString seq = editors[i]->keySequence().toString();
+            if (seq.isEmpty()) continue;
+            if (seen.contains(seq)) {
+                QMessageBox::warning(&dlg, tr("Shortcut conflict"),
+                    tr("%1 is assigned to both \"%2\" and \"%3\".")
+                        .arg(editors[i]->keySequence().toString(QKeySequence::NativeText),
+                             seen.value(seq), m_commands[i].name));
+                return;
+            }
+            seen.insert(seq, m_commands[i].name);
+        }
+        // Commit: store overrides (or clear back to default) and apply live.
+        QSettings s;
+        for (int i = 0; i < editors.size(); ++i) {
+            const QKeySequence seq = editors[i]->keySequence();
+            Command &c = m_commands[i];
+            const QString key = "shortcuts/" + c.id;
+            if (seq == c.defaultSeq) s.remove(key);            // track default
+            else s.setValue(key, seq.toString());
+            c.action->setShortcut(seq);
+        }
+        dlg.accept();
+    });
+
+    dlg.exec();
 }
 
 // Apply the application-wide palette and re-theme every open editor. The Qt
