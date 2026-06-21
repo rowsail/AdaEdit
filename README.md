@@ -10,8 +10,10 @@ and a Borland-flavoured keybinding UX.
 ### Editing
 - Tabbed Ada editor (QScintilla) with the `AdaLexer` (Ada 95 keywords from
   SETEdit + Ada 2005/2022 additions), line numbers, folding, auto-indent.
-- File: New / Open / Save / Save As (with unsaved-changes guard); open files or a
-  folder from the command line.
+  Right-click a tab to **Close**, **Close all others**, or close everything **to
+  the left / to the right**.
+- File: New / Open / Save / Save As / **Save All** (with unsaved-changes guard);
+  open files or a folder from the command line.
 - Edit: Undo / Redo / Cut / Copy / Paste, and **Format (Ada)** — reformats the
   whole file, or just the selected lines, via the language server.
 - Search: Find / Replace / Find next / Go to line / Go to definition / Complete.
@@ -35,7 +37,8 @@ and a Borland-flavoured keybinding UX.
 - The editor targets the ESP32-S3 only and drives the repo's **`./x`** launcher
   for **Build / Flash / Run / Monitor** (toolbar buttons and the Build menu).
   Commands run at the project root and expand `{repo}`, `{root}`, `{example}`,
-  `{profile}`, `{file}`, `{dir}`, `{base}`, `{exe}`.
+  `{profile}`, `{file}`, `{dir}`, `{base}`, `{exe}`. Build / Flash / Run **Save
+  All** first, so they never compile stale source.
 - **Runtime profile selector** (toolbar): *Auto (example default)* /
   *Jorvik (light-tasking)* / *Embedded* / *Full*. The choice is passed to
   `./x … --profile <p>`, which maps it to `ESP32S3_RTS_PROFILE` (the external the
@@ -67,7 +70,7 @@ build/debug. **All are rebindable** in Settings → Keyboard shortcuts.
 
 | | |
 |---|---|
-| File | Ctrl+N New · Ctrl+O Open · Ctrl+K Ctrl+O Open folder · Ctrl+S Save · Ctrl+Shift+S Save As · Ctrl+Q Exit |
+| File | Ctrl+N New · Ctrl+O Open · Ctrl+K Ctrl+O Open folder · Ctrl+S Save · Ctrl+Shift+S Save As · Ctrl+Alt+S Save All · Ctrl+Q Exit |
 | Edit | Ctrl+Z Undo · Ctrl+Y Redo · Ctrl+X/C/V Cut/Copy/Paste · Ctrl+Shift+F Format |
 | Search | Ctrl+F Find · Ctrl+H Replace · F3 Find next · Ctrl+G Goto line · F12 Go to definition · Ctrl+Space Complete |
 | View | Ctrl+Shift+1..8 toggle docks |
