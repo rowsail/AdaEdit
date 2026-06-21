@@ -47,10 +47,15 @@ public:
     void openPath(const QString &path);
     void openFolderPath(const QString &path);
     void restoreLastFolder();
+    void restoreSession();        // reopen last folder + files + active tab
+    void ensureOpenTab();         // create an untitled tab if none are open
 
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    void saveSession();           // window geometry + dock layout + open files
 
 private slots:
     // File / folder

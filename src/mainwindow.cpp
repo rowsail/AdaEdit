@@ -159,10 +159,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     createDebugBar();
     updateDebugActions();
 
-    resize(1200, 800);
-    newFile();
+    resize(1200, 800);                   // default; overridden by saved geometry
     applyTheme();                        // honour the saved dark-mode preference
     applyFonts();                        // honour the saved font preferences
+
+    // Restore the last session's window size/position and dock+toolbar layout.
+    // (Open files + active tab are restored from main() via restoreSession.)
+    QSettings session;
+    if (session.contains("session/geometry"))
+        restoreGeometry(session.value("session/geometry").toByteArray());
+    if (session.contains("session/windowState"))
+        restoreState(session.value("session/windowState").toByteArray());
+
     statusBar()->showMessage(tr("Ready"));
 }
 
@@ -769,6 +777,7 @@ void MainWindow::createActionBar()
     // ESP32-S3 build actions. (This editor targets the ESP32-S3 only, so there
     // is no target picker — the commands come from the single fixed profile.)
     auto *bar = addToolBar(tr("Actions"));
+    bar->setObjectName("actionBar");     // stable id for saveState/restoreState
     bar->setMovable(false);
     bar->addAction(tr("Build"), this, &MainWindow::doBuild);
     bar->addAction(tr("Flash"), this, &MainWindow::doFlash);
@@ -779,6 +788,7 @@ void MainWindow::createActionBar()
 void MainWindow::createDebugBar()
 {
     auto *bar = addToolBar(tr("Debug"));
+    bar->setObjectName("debugBar");      // stable id for saveState/restoreState
     bar->setMovable(false);
     for (QAction *a : {m_actStart, m_actContinue, m_actStepOver,
                        m_actStepInto, m_actPause, m_actRestart, m_actStop})
@@ -934,7 +944,48 @@ void MainWindow::closeEvent(QCloseEvent *event)
             event->ignore();
             return;
         }
+    saveSession();           // only once the close is going ahead
     event->accept();
+}
+
+// Persist enough to reopen looking like this session: window geometry, the
+// dock/toolbar layout, the set of open files and which tab was active. The
+// opened folder is already stored as "lastFolder" when opened.
+void MainWindow::saveSession()
+{
+    QSettings s;
+    s.setValue("session/geometry", saveGeometry());
+    s.setValue("session/windowState", saveState());
+
+    QStringList files;
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(i));
+        const QString p = e ? editorPath(e) : QString();
+        if (!p.isEmpty()) files << p;        // skip untitled (no path)
+    }
+    s.setValue("session/openFiles", files);
+
+    QString active;
+    if (auto *e = currentEditor()) active = editorPath(e);
+    s.setValue("session/activeFile", active);
+}
+
+void MainWindow::restoreSession()
+{
+    restoreLastFolder();                      // explorer root + project file
+    QSettings s;
+    const QStringList files = s.value("session/openFiles").toStringList();
+    for (const QString &p : files)
+        if (QFileInfo(p).isFile()) openPath(p);
+    const QString active = s.value("session/activeFile").toString();
+    if (!active.isEmpty())
+        if (QsciScintilla *e = editorForPath(active))
+            m_tabs->setCurrentWidget(e);
+}
+
+void MainWindow::ensureOpenTab()
+{
+    if (m_tabs->count() == 0) newFile();
 }
 
 // ---- Edit ----------------------------------------------------------------
