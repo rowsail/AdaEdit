@@ -1,0 +1,56 @@
+name: Build (Debian)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:13          # trixie — same release as the dev machine
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake \
+            qtbase5-dev qtbase5-dev-tools qttools5-dev-tools \
+            libqscintilla2-qt5-dev \
+            git ca-certificates xauth xvfb
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Smoke test (launch headless)
+        run: |
+          printf 'procedure T is\nbegin\n   null;\nend T;\n' > /tmp/t.adb
+          echo "shared libs:"; ldd build/adaedit
+          if ldd build/adaedit | grep -q 'not found'; then
+            echo "::error::missing shared library"; exit 1
+          fi
+          # Launch under a virtual display; a clean startup keeps running, so a
+          # timeout-kill (exit 124) means it came up without crashing.
+          set +e
+          xvfb-run -a timeout 8 build/adaedit /tmp/t.adb
+          ec=$?
+          set -e
+          if [ "$ec" -eq 124 ]; then
+            echo "launched OK (event loop running, killed by timeout)"
+          else
+            echo "::error::adaedit exited early (code $ec)"; exit 1
+          fi
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaedit-debian13-amd64
+          path: build/adaedit
+          if-no-files-found: error

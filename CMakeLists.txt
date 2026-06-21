@@ -24,14 +24,16 @@ endif()
 find_path(QSCINTILLA_INCLUDE_DIR
     NAMES Qsci/qsciscintilla.h
     HINTS "${QSCINTILLA_ROOT}/include" "${_QT_HEADERS}" ENV QSCINTILLA_ROOT
-    PATHS /usr/include /usr/local/include /opt/homebrew/include
+    PATHS /usr/include "/usr/include/${CMAKE_LIBRARY_ARCHITECTURE}"   # Debian multiarch
+          /usr/local/include /opt/homebrew/include
           /opt/homebrew/opt/qscintilla2/include /usr/local/opt/qscintilla2/include
     PATH_SUFFIXES qt5 qt)
 
 find_library(QSCINTILLA_LIBRARY
     NAMES qscintilla2_qt5 qt5scintilla2 qscintilla2
     HINTS "${QSCINTILLA_ROOT}/lib" "${_QT_LIBS}" ENV QSCINTILLA_ROOT
-    PATHS /usr/lib /usr/local/lib /opt/homebrew/lib
+    PATHS /usr/lib "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}"           # Debian multiarch
+          /usr/local/lib /opt/homebrew/lib
           /opt/homebrew/opt/qscintilla2/lib /usr/local/opt/qscintilla2/lib)
 
 if(NOT QSCINTILLA_INCLUDE_DIR OR NOT QSCINTILLA_LIBRARY)
