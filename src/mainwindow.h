@@ -129,6 +129,8 @@ private:
     void ensureLsp(const QString &file);
     void requestDefinition(QsciScintilla *e, int line, int index);
     void requestHover(QsciScintilla *e, int line, int index, const QPoint &anchorGlobal);
+    void requestFormat(QsciScintilla *e);
+    void applyTextEdits(QsciScintilla *e, const QList<LspClient::TextEdit> &edits);
     void applyDiagnostics(QsciScintilla *e);
     void refreshProblems();
     void showHoverPopup(const QString &text, const QPoint &globalPos);

@@ -30,12 +30,23 @@ public:
         QString message;
     };
 
+    // A single LSP TextEdit: replace [start,end) with newText.
+    struct TextEdit {
+        int startLine = 0, startChar = 0, endLine = 0, endChar = 0;
+        QString newText;
+    };
+
     using DefCallback = std::function<void(const QString &uri, int line, int character)>;
     using HoverCallback = std::function<void(const QString &text)>;
     using CompletionCallback = std::function<void(const QStringList &items)>;
+    using FormatCallback = std::function<void(const QList<TextEdit> &edits)>;
     void definition(const QString &path, int line, int character, DefCallback cb);
     void hover(const QString &path, int line, int character, HoverCallback cb);
     void completion(const QString &path, int line, int character, CompletionCallback cb);
+    void formatting(const QString &path, int tabSize, bool insertSpaces, FormatCallback cb);
+    void rangeFormatting(const QString &path, int startLine, int startChar,
+                         int endLine, int endChar, int tabSize, bool insertSpaces,
+                         FormatCallback cb);
 
     static QString pathToUri(const QString &path);
     static QString uriToPath(const QString &uri);

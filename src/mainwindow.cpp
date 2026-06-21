@@ -11,6 +11,8 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+#include <algorithm>
+
 namespace {
 constexpr int MARK_DEBUG = 1;        // current execution line (arrow)
 constexpr int MARK_BREAKPOINT = 2;   // enabled breakpoint (red circle)
@@ -896,6 +898,82 @@ void MainWindow::requestHover(QsciScintilla *e, int line, int index, const QPoin
     });
 }
 
+// Reformat to the Ada standard via the language server. With no selection the
+// whole document is formatted; with a selection only the lines it touches are
+// (the range is widened to whole lines, per the user-facing behaviour).
+void MainWindow::requestFormat(QsciScintilla *e)
+{
+    if (!m_lsp || !m_lsp->isRunning()) {
+        statusBar()->showMessage(tr("Language server not available"), 3000);
+        return;
+    }
+    const QString path = editorPath(e);
+    if (path.isEmpty()) {
+        statusBar()->showMessage(tr("Save the file before formatting"), 4000);
+        return;
+    }
+    m_lsp->didChange(path, e->text());          // format the latest text
+
+    const int tabSize = e->tabWidth() > 0 ? e->tabWidth() : 3;
+    const bool insertSpaces = !e->indentationsUseTabs();
+    auto apply = [this, e](const QList<LspClient::TextEdit> &edits) {
+        if (edits.isEmpty()) { statusBar()->showMessage(tr("No formatting changes"), 3000); return; }
+        applyTextEdits(e, edits);
+        statusBar()->showMessage(tr("Formatted"), 3000);
+    };
+
+    if (e->hasSelectedText()) {
+        int l1, i1, l2, i2;
+        e->getSelection(&l1, &i1, &l2, &i2);
+        // A selection that ends at column 0 of a line doesn't include that line.
+        int lastLine = (i2 == 0 && l2 > l1) ? l2 - 1 : l2;
+        // Widen to whole lines: from the start of l1 to the end of lastLine.
+        int endLine, endChar;
+        if (lastLine + 1 < e->lines()) {            // end at the start of the next line
+            endLine = lastLine + 1;
+            endChar = 0;
+        } else {                                    // last line: end at its content length
+            QString lt = e->text(lastLine);
+            while (lt.endsWith('\n') || lt.endsWith('\r')) lt.chop(1);
+            endLine = lastLine;
+            endChar = lt.length();
+        }
+        m_lsp->rangeFormatting(path, l1, 0, endLine, endChar, tabSize, insertSpaces, apply);
+    } else {
+        m_lsp->formatting(path, tabSize, insertSpaces, apply);
+    }
+}
+
+// Apply LSP TextEdits to the editor as one undo step. Edits are applied last
+// position first so earlier (higher) edits keep their coordinates valid.
+void MainWindow::applyTextEdits(QsciScintilla *e, const QList<LspClient::TextEdit> &edits)
+{
+    QList<LspClient::TextEdit> sorted = edits;
+    std::sort(sorted.begin(), sorted.end(),
+              [](const LspClient::TextEdit &a, const LspClient::TextEdit &b) {
+                  if (a.startLine != b.startLine) return a.startLine > b.startLine;
+                  return a.startChar > b.startChar;
+              });
+
+    int curLine, curIdx;
+    e->getCursorPosition(&curLine, &curIdx);
+    int firstVisible = e->firstVisibleLine();
+
+    e->beginUndoAction();
+    for (const LspClient::TextEdit &te : sorted) {
+        e->setSelection(te.startLine, te.startChar, te.endLine, te.endChar);
+        e->replaceSelectedText(te.newText);
+    }
+    e->endUndoAction();
+
+    // Restore a sensible cursor/scroll position (line count may have changed).
+    if (curLine >= e->lines()) curLine = e->lines() - 1;
+    e->setCursorPosition(curLine, 0);
+    e->setFirstVisibleLine(qMin(firstVisible, qMax(0, e->lines() - 1)));
+
+    if (m_lsp) m_lsp->didChange(editorPath(e), e->text());   // keep the server in sync
+}
+
 void MainWindow::showHoverPopup(const QString &text, const QPoint &globalPos)
 {
     // A floating info label that stays until the user clicks elsewhere or presses
@@ -1290,6 +1368,10 @@ void MainWindow::onEditorContextMenu(const QPoint &pos)
     def->setEnabled(ada);
     hov->setEnabled(ada);
     menu.addSeparator();
+    QAction *fmt = menu.addAction(e->hasSelectedText() ? tr("Format selection")
+                                                       : tr("Format document"));
+    fmt->setEnabled(ada);
+    menu.addSeparator();
     QAction *bp = menu.addAction(has ? tr("Clear breakpoint") : tr("Set breakpoint"));
     menu.addSeparator();
     QAction *cut   = menu.addAction(tr("Cut"));
@@ -1305,6 +1387,7 @@ void MainWindow::onEditorContextMenu(const QPoint &pos)
     QAction *chosen = menu.exec(e->mapToGlobal(pos));
     if (chosen == def)        requestDefinition(e, defLine, defIndex);
     else if (chosen == hov)   requestHover(e, defLine, defIndex, e->mapToGlobal(pos));
+    else if (chosen == fmt)   requestFormat(e);
     else if (chosen == bp)    toggleBreakpoint(e, line);
     else if (chosen == cut)   e->cut();
     else if (chosen == copy)  e->copy();

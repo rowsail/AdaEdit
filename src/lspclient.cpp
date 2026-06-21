@@ -72,6 +72,8 @@ void LspClient::start(const QString &serverPath, const QString &rootPath, const 
     QJsonObject tdCaps;
     tdCaps["publishDiagnostics"] = pub;
     tdCaps["completion"] = completion;
+    tdCaps["formatting"] = QJsonObject{{"dynamicRegistration", false}};
+    tdCaps["rangeFormatting"] = QJsonObject{{"dynamicRegistration", false}};
     QJsonObject caps;
     caps["textDocument"] = tdCaps;
 
@@ -305,4 +307,45 @@ void LspClient::hover(const QString &path, int line, int character, HoverCallbac
         }
         cb(text.trimmed());
     });
+}
+
+// Parse a textDocument/formatting result (an array of TextEdit) into our struct.
+static QList<LspClient::TextEdit> parseEdits(const QJsonValue &result)
+{
+    QList<LspClient::TextEdit> edits;
+    if (!result.isArray()) return edits;
+    for (const QJsonValue &v : result.toArray()) {
+        const QJsonObject o = v.toObject();
+        const QJsonObject r = o.value("range").toObject();
+        const QJsonObject s = r.value("start").toObject();
+        const QJsonObject e = r.value("end").toObject();
+        LspClient::TextEdit te;
+        te.startLine = s.value("line").toInt();
+        te.startChar = s.value("character").toInt();
+        te.endLine = e.value("line").toInt();
+        te.endChar = e.value("character").toInt();
+        te.newText = o.value("newText").toString();
+        edits.push_back(te);
+    }
+    return edits;
+}
+
+void LspClient::formatting(const QString &path, int tabSize, bool insertSpaces, FormatCallback cb)
+{
+    QJsonObject options{{"tabSize", tabSize}, {"insertSpaces", insertSpaces}};
+    QJsonObject params{{"textDocument", docId(path)}, {"options", options}};
+    sendRequest("textDocument/formatting", params,
+                [cb](const QJsonValue &result) { cb(parseEdits(result)); });
+}
+
+void LspClient::rangeFormatting(const QString &path, int startLine, int startChar,
+                                int endLine, int endChar, int tabSize, bool insertSpaces,
+                                FormatCallback cb)
+{
+    QJsonObject range{{"start", position(startLine, startChar)},
+                      {"end", position(endLine, endChar)}};
+    QJsonObject options{{"tabSize", tabSize}, {"insertSpaces", insertSpaces}};
+    QJsonObject params{{"textDocument", docId(path)}, {"range", range}, {"options", options}};
+    sendRequest("textDocument/rangeFormatting", params,
+                [cb](const QJsonValue &result) { cb(parseEdits(result)); });
 }
