@@ -155,6 +155,7 @@ Not needed to compile the editor — needed for its actions to work:
     src/lspclient.*       Ada Language Server client (definition, hover, completion, format)
     docs/ada_keywords.txt        extracted Ada keyword set + lexing rules
     docs/setedit_keybindings.txt extracted SETEdit menu + keybinding inventory
+    docs/design-self-contained-ide.md  AppImage self-contained IDE design notes
 
 ## ESP32-S3 workflow
 
