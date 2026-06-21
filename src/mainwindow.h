@@ -98,6 +98,7 @@ private slots:
     void doFlash();
     void doRun();
     void doMonitor();
+    void showRuntimePath();        // echo the resolved RTS path to the output pane
     void onActionOutput();
     void onActionFinished(int exitCode);
 

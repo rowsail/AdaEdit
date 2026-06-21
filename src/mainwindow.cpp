@@ -9,6 +9,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QRegularExpression>
 
 #include <algorithm>
 
@@ -447,6 +448,9 @@ void MainWindow::createMenus()
                 "build.run", QKeySequence(Qt::SHIFT | Qt::Key_F9));
     registerCmd(build->addAction(tr("&Monitor"), this, &MainWindow::doMonitor),
                 "build.monitor", QKeySequence(Qt::ALT | Qt::Key_F5));           // ~Borland User screen
+    build->addSeparator();
+    registerCmd(build->addAction(tr("Show runtime &path"), this, &MainWindow::showRuntimePath),
+                "build.runtimePath");
 
     QMenu *debug = menuBar()->addMenu(tr("&Debug"));
     m_actStart    = debug->addAction(tr("Start &debugging"), this, &MainWindow::debugStart);
@@ -811,6 +815,49 @@ void MainWindow::onProfileChanged(int)
     m_profile = m_profileCombo->currentData().toString();
     QSettings().setValue("buildProfile", m_profile);
     statusBar()->showMessage(tr("Build profile: %1").arg(m_profile), 3000);
+}
+
+// Grep a shell script for an `ESP32S3_RTS_PROFILE=<value>` assignment, mirroring
+// the ./x launcher's profile_of (so "auto" resolves to the example's own).
+static QString rtsProfileIn(const QString &file)
+{
+    QFile f(file);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    static const QRegularExpression re("ESP32S3_RTS_PROFILE=([a-z-]+)");
+    const QRegularExpressionMatch m = re.match(QString::fromUtf8(f.readAll()));
+    return m.hasMatch() ? m.captured(1) : QString();
+}
+
+// Echo the runtime directory the build will use, the way esp32s3_rts.gpr derives
+// it: <repo>/crates/esp32s3_rts/<profile>-esp32s3.
+void MainWindow::showRuntimePath()
+{
+    const CmdContext ctx = ctxForCurrent();
+    const QString repo = ctx.repo.isEmpty() ? ctx.root : ctx.repo;
+
+    // Effective profile: the explicit selection, or (for "auto") the example's
+    // own as detected from its build scripts (default light-tasking).
+    QString prof = m_profile;
+    if (prof.isEmpty() || prof == "auto") {
+        const QString exdir = (!ctx.example.isEmpty() && !repo.isEmpty())
+            ? QDir(repo).filePath("examples/" + ctx.example) : ctx.root;
+        prof = rtsProfileIn(QDir(exdir).filePath("build.sh"));
+        if (prof.isEmpty()) prof = rtsProfileIn(QDir(exdir).filePath("main/build_ada.sh"));
+        if (prof.isEmpty()) prof = "light-tasking";          // ./x default
+    }
+
+    const QString path = QDir(repo).filePath("crates/esp32s3_rts/" + prof + "-esp32s3");
+    const bool exists = QFileInfo::exists(path);
+
+    // Make sure the Output dock is visible, then echo.
+    for (QDockWidget *d : m_docks)
+        if (d->isAncestorOf(m_output)) { d->show(); d->raise(); break; }
+    m_output->appendPlainText(
+        QStringLiteral("[runtime] profile=%1%2  ->  %3%4")
+            .arg(prof,
+                 (m_profile == "auto" || m_profile.isEmpty()) ? tr(" (auto)") : QString(),
+                 path,
+                 exists ? QString() : tr("   (not built yet)")));
 }
 
 void MainWindow::createDebugBar()
