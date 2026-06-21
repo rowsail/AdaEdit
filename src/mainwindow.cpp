@@ -266,8 +266,13 @@ void MainWindow::createDocks()
     probDock->setWidget(m_problemsList);
     addDockWidget(Qt::BottomDockWidgetArea, probDock);
 
-    // Ordered list backing the View menu's show/hide toggles.
+    // Ordered list backing the View menu's show/hide toggles. Stable object
+    // names give each dock toggle a stable command id ("view.<name>").
     m_docks = {explorer, outDock, dbgDock, bpDock, varsDock, thrDock, stackDock, probDock};
+    const char *dockNames[] = {"explorer", "output", "debugConsole", "breakpoints",
+                               "variables", "threads", "callStack", "problems"};
+    for (int i = 0; i < m_docks.size(); ++i)
+        m_docks[i]->setObjectName(QString::fromLatin1(dockNames[i]));
 }
 
 // ---- editor factory ------------------------------------------------------
@@ -390,9 +395,19 @@ void MainWindow::createMenus()
     // View: one checkable entry per dock. QDockWidget::toggleViewAction() is
     // already checkable, shows/hides the dock, and unticks itself when the dock
     // is closed via its title-bar X — so re-ticking it brings the dock back.
+    // Default shortcuts Ctrl+Shift+1..8 toggle the dock; rebindable like any
+    // other command.
     QMenu *view = menuBar()->addMenu(tr("&View"));
-    for (QDockWidget *dock : m_docks)
-        view->addAction(dock->toggleViewAction());
+    int viewNum = 0;
+    for (QDockWidget *dock : m_docks) {
+        QAction *a = dock->toggleViewAction();
+        view->addAction(a);
+        ++viewNum;
+        const QKeySequence def = viewNum <= 9
+            ? QKeySequence(Qt::CTRL | Qt::SHIFT | (Qt::Key_0 + viewNum))
+            : QKeySequence();
+        registerCmd(a, "view." + dock->objectName(), def);
+    }
 
     QMenu *search = menuBar()->addMenu(tr("&Search"));
     registerCmd(search->addAction(tr("&Find..."), this, &MainWindow::find),
