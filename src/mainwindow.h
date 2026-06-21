@@ -66,7 +66,9 @@ private slots:
     void onTreeActivated(const QModelIndex &index);
     bool saveFile();
     bool saveFileAs();
-    void closeTab(int index);
+    void saveAll();
+    bool closeTab(int index);
+    void onTabContextMenu(const QPoint &pos);
     void openSettings();
     void openShortcuts();
     void formatCurrent();
@@ -156,6 +158,9 @@ private:
     void showHoverPopup(const QString &text, const QPoint &globalPos);
     bool maybeSave(QsciScintilla *e);
     bool writeToFile(QsciScintilla *e, const QString &path);
+    void closeOtherTabs(int index);
+    void closeTabsToLeft(int index);
+    void closeTabsToRight(int index);
     void setEditorPath(QsciScintilla *e, const QString &path);
     QString editorPath(QsciScintilla *e) const;
 

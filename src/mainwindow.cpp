@@ -139,6 +139,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_tabs->setMovable(true);
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::closeTab);
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::updateTitle);
+    m_tabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tabs->tabBar(), &QWidget::customContextMenuRequested,
+            this, &MainWindow::onTabContextMenu);
     setCentralWidget(m_tabs);
 
     m_project = Project::makeDefault();
@@ -378,6 +381,8 @@ void MainWindow::createMenus()
                 "file.save", QKeySequence::Save);
     registerCmd(file->addAction(tr("Save &as..."), this, &MainWindow::saveFileAs),
                 "file.saveAs", QKeySequence::SaveAs);
+    registerCmd(file->addAction(tr("Save A&ll"), this, &MainWindow::saveAll),
+                "file.saveAll", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S));
     file->addSeparator();
     registerCmd(file->addAction(tr("Se&ttings..."), this, &MainWindow::openSettings),
                 "file.settings");
@@ -1001,14 +1006,82 @@ bool MainWindow::maybeSave(QsciScintilla *e)
     return ret == QMessageBox::Discard;
 }
 
-void MainWindow::closeTab(int index)
+bool MainWindow::closeTab(int index)
 {
     auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(index));
-    if (!maybeSave(e)) return;
+    if (!maybeSave(e)) return false;       // user cancelled
     if (e == m_markerEditor) { m_markerEditor = nullptr; m_markerHandle = -1; }
     m_tabs->removeTab(index);
     delete e;
     if (m_tabs->count() == 0) newFile();
+    return true;
+}
+
+// Close every tab except the one at `index` (tracked by widget so shifting
+// indices don't matter); stop early if the user cancels a save.
+void MainWindow::closeOtherTabs(int index)
+{
+    QWidget *keep = m_tabs->widget(index);
+    for (int i = m_tabs->count() - 1; i >= 0; --i) {
+        if (m_tabs->widget(i) == keep) continue;
+        if (!closeTab(i)) return;
+    }
+}
+
+void MainWindow::closeTabsToLeft(int index)
+{
+    for (int i = index - 1; i >= 0; --i)   // descending: lower indices stay valid
+        if (!closeTab(i)) return;
+}
+
+void MainWindow::closeTabsToRight(int index)
+{
+    for (int i = m_tabs->count() - 1; i > index; --i)
+        if (!closeTab(i)) return;
+}
+
+void MainWindow::onTabContextMenu(const QPoint &pos)
+{
+    QTabBar *bar = m_tabs->tabBar();
+    const int idx = bar->tabAt(pos);
+    if (idx < 0) return;                    // not on a tab
+    const int n = m_tabs->count();
+
+    QMenu menu;
+    QAction *aClose  = menu.addAction(tr("Close"));
+    menu.addSeparator();
+    QAction *aOthers = menu.addAction(tr("Close all others"));
+    QAction *aLeft   = menu.addAction(tr("Close all to the left"));
+    QAction *aRight  = menu.addAction(tr("Close all to the right"));
+    aOthers->setEnabled(n > 1);
+    aLeft->setEnabled(idx > 0);
+    aRight->setEnabled(idx < n - 1);
+
+    QAction *chosen = menu.exec(bar->mapToGlobal(pos));
+    if      (chosen == aClose)  closeTab(idx);
+    else if (chosen == aOthers) closeOtherTabs(idx);
+    else if (chosen == aLeft)   closeTabsToLeft(idx);
+    else if (chosen == aRight)  closeTabsToRight(idx);
+}
+
+// Save every modified tab (prompting for a path only on never-saved buffers).
+void MainWindow::saveAll()
+{
+    int saved = 0;
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(i));
+        if (!e || !e->isModified()) continue;
+        const QString path = editorPath(e);
+        bool ok;
+        if (!path.isEmpty()) {
+            ok = writeToFile(e, path);
+        } else {
+            m_tabs->setCurrentWidget(e);    // saveFileAs() acts on the current editor
+            ok = saveFileAs();
+        }
+        if (ok) ++saved;
+    }
+    if (saved > 0) statusBar()->showMessage(tr("Saved %1 file(s)").arg(saved), 3000);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -1543,14 +1616,17 @@ void MainWindow::runAction(const QString &cmdTemplate, const QString &what)
 
 void MainWindow::doBuild()
 {
+    saveAll();                                 // never build stale source
     if (const TargetProfile *t = m_project.active()) runAction(t->buildCommand, tr("Build"));
 }
 void MainWindow::doFlash()
 {
+    saveAll();                                 // Flash compiles too
     if (const TargetProfile *t = m_project.active()) runAction(t->flashCommand, tr("Flash"));
 }
 void MainWindow::doRun()
 {
+    saveAll();                                 // Run = build + flash + run
     if (const TargetProfile *t = m_project.active()) runAction(t->runCommand, tr("Run"));
 }
 void MainWindow::doMonitor()
