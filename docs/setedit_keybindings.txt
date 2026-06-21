@@ -1,0 +1,197 @@
+
+## File
+  Open...                          cmeOpen                    F3
+  Save                             cmcSave                    F2
+  Quit                             cmeQuitDelete              Alt+Q
+  Exit                             cmeQuit                    Alt+X
+
+## Edit
+  Undo                             cmcUndo                    Alt+BackSpace
+  Cut                              cmcCut                     Shift+Del
+  Copy                             cmcCopy                    Ctrl+Ins
+  Paste                            cmcPaste                   Shift+Ins
+  Clear                            cmcClear                   Ctrl+Del
+  Set Local options                cmcSetLocalOptions         Alt+L
+  Set Global options               cmcSetGlobalOptions        Alt+G
+  Record                           cmcRecordMacro             Shift+F10
+  Stop                             cmcStopMacro               Alt+F10
+  Play                             cmcPlayMacro               Ctrl+F10
+  Insert new line (don't move)     cmcInsertNewLine           Ctrl+N
+
+## Search
+  Find...                          cmcFind                    Ctrl+Q-F
+  Replace...                       cmcReplace                 Ctrl+Q-A
+  Search again                     cmcSearchAgain             Ctrl+L
+  Jump to function                 cmcJumpToFunction          Alt+F2
+  Jump to symbol                   cmeSearchTag               Ctrl+F2
+  Go to line                       cmcGotoEditorLine          Ctrl+J
+  Word completion                  cmeWordCompletion          Ctrl+Tab
+  Jump to last cursor position     cmcJumpLastCursorPos       Ctrl+Q-P
+
+## Macro
+  Record                           cmcRecordMacro             Shift+F10
+  Stop                             cmcStopMacro               Alt+F10
+  Play                             cmcPlayMacro               Ctrl+F10
+  Repeat                           cmcRepeatMacro             Shift+F3
+
+## Rectangle
+  Start                            cmcSelRectStart            Ctrl+K-Shift+B
+  End                              cmcSelRectEnd              Ctrl+K-Shift+K
+  Hide                             cmcSelRectHide             Ctrl+K-Shift+H
+  Copy                             cmcSelRectCopy             Ctrl+K-Shift+C
+  Paste                            cmcSelRectPaste            Ctrl+K-Shift+P
+  Cut                              cmcSelRectCut              Ctrl+K-Shift+T
+  Clear                            cmcSelRectDel              Ctrl+K-Shift+L
+  Move                             cmcSelRectMove             Ctrl+K-Shift+M
+
+## Windows
+  Size/move                        cmeResize                  Ctrl+F5
+  Zoom                             cmeZoom                    F5
+  Next                             cmeNext                    F6
+  Previous                         cmePrev                    Shift+F6
+  Close                            cmeClose                   Alt+F3
+  List                             cmeListWin                 Alt+0
+  User Screen                      cmeUserScreen              Alt+F5
+  Project Window                   cmeSelWinPrj               Alt+1
+  Window  2                        cmeSelWindow2              Alt+2
+  Window  3                        cmeSelWindow3              Alt+3
+  Window  4                        cmeSelWindow4              Alt+4
+  Window  5                        cmeSelWindow5              Alt+5
+  Window  6                        cmeSelWindow6              Alt+6
+  Window  7                        cmeSelWindow7              Alt+7
+  Window  8                        cmeSelWindow8              Alt+8
+  Window  9                        cmeSelWindow9              Alt+9
+  Scroll Up                        cmcScrollUp                Ctrl+Z
+  Scroll Down                      cmcScrollDown              Ctrl+W
+
+## Tool&Ops
+  Local edition...                 cmcSetLocalOptions         Alt+L
+  Global edition...                cmcSetGlobalOptions        Alt+G
+  Calculator                       cmeCalculator              Alt+F4
+  SDG                              cmeSDG                     F9
+  Run program                      cmeRunCommand              Ctrl+F9
+  Grep...                          cmeGrepDialog              Shift+F2
+
+## Project
+
+## Debug
+  Breakpoint                       cmeBreakpoint              Ctrl+F8
+  Run/Continue/Atach               cmeDbgRunContinue          Shift+F9
+  Step over                        cmeDbgStepOver             F8
+  Trace into                       cmeDbgTraceInto            F7
+  Go to cursor                     cmeDbgGoToCursor           F4
+  Evaluate/Modify...               cmeDbgEvalModify           Ctrl+F4
+  Normal watch...                  cmeDbgWatchExpNorm         Ctrl+F7
+  Using the Inspector...           cmeDbgInspector            Ctrl+F6
+  Calling stack                    cmeDbgCallStack            Ctrl+F3
+
+## Help
+  INF View                         cmeInfView                 F1
+  Search                           cmeSyntaxHelp              Ctrl+F1
+
+## Editor Right Click
+  Syntax help                      cmeSyntaxHelp              Ctrl+F1
+  Find...                          cmcFind                    Ctrl+Q-F
+  Replace...                       cmcReplace                 Ctrl+Q-A
+  Jump to function                 cmcJumpToFunction          Alt+F2
+  Copy                             cmcCopy                    Ctrl+Ins
+  Paste                            cmcPaste                   Shift+Ins
+  Cut                              cmcCut                     Shift+Del
+
+## File
+  Read block...                    cmDWRead                   Ctrl+R
+  Write block...                   cmDWWrite                  Ctrl+W
+  Exit                             cmeQuit                    Alt+X
+
+## Move
+  Up                               cmDWUp                     Cursor up
+  Down                             cmDWDown                   Cursor down
+  Right                            cmDWRight                  ->
+  Left                             cmDWLeft                   <-
+  Page down                        cmDWPgDn                   Page Down
+  Page up                          cmDWPgUp                   Page Up
+  First column                     cmDWFirstColumn            Home
+  Last column                      cmDWLastColumn             End
+  First row                        cmDWFirstRow               Ctrl+Home
+  Last row                         cmDWLastRow                Ctrl+End
+  First addr. increment            cmDWBaseIncrement          Ctrl+->
+  First addr. decrement            cmDWBaseDecrement          Ctrl+<-
+
+## Address
+  Change base address...           cmDWBaseAddress            Ctrl+B
+  Go to new address...             cmDWGotoAddress            Ctrl+G
+  Follow pointer                   cmDWFollowPointer          Ctrl+F
+  Follow pointer in new window     cmDWFollowPtnNew           Ctrl+O
+  Recompute address                cmDWRecompute              Ctrl+H
+
+## Mode
+  Toggle auto follow               cmDWTogAutoF               Ctrl+A
+  Change display mode              cmDWDispMode               Ctrl+D
+  Toggle endian mode               cmDWTogEndian              Ctrl+E
+  Change radix                     cmDWRadix                  Ctrl+X
+
+## Block
+  Fill...                          cmDWFill                   Ctrl+I
+  Clear...                         cmDWClear                  Ctrl+L
+  Move...                          cmDWMove                   Ctrl+M
+
+## Various
+  Less bytes per line              cmDWLessLines              -
+  More bytes per line              cmDWMoreLines              +
+  Update memory                    cmDWUpdateMemory           Enter
+
+## Windows
+  Size/move                        cmeResize                  Ctrl+F5
+  Zoom                             cmeZoom                    F5
+  Next                             cmeNext                    F6
+  Previous                         cmePrev                    Shift+F6
+  Close                            cmeClose                   Alt+F3
+  List                             cmeListWin                 Alt+0
+  Project Window                   cmeSelWinPrj               Alt+1
+
+## File
+  Open info file...                cmInfOpen                  Ctrl+A
+  Exit                             cmeQuit                    Alt+X
+
+## Edit
+  Copy                             cmcCopy                    Ctrl+Ins
+  Copy header                      cmInfPasteIn               Ctrl+I
+  Configuration dialog...          cmhConfigDia               Ctrl+F
+  Control dialog...                cmInfControl               Alt+F10
+
+## Search
+  Find...                          cmcFind                    Ctrl+S
+  Search again                     cmcSearchAgain             Ctrl+L
+  Bookmarks...                     cmInfBookM                 Ctrl+B
+  List of nodes...                 cmInfNodes                 Ctrl+O
+  Go to '(file)node'...            cmInfGoto                  Ctrl+G
+
+## Navigation
+  Last visited topic               cmInfBack                  Alt+F1
+  Next topic                       cmhNext                    Ctrl+N
+  Previous topic                   cmhPrev                    Ctrl+P
+  Go up in herarchy                cmhUp                      Ctrl+U
+  Main menu for this file          cmInfTop                   Ctrl+T
+  Info directory                   cmInfDir                   Ctrl+D
+  Jump to last link                cmInfLastLink              0
+  Link 1                           cmInfLink1                 1
+  Link 2                           cmInfLink2                 2
+  Link 3                           cmInfLink3                 3
+  Link 4                           cmInfLink4                 4
+  Link 5                           cmInfLink5                 5
+  Link 6                           cmInfLink6                 6
+  Link 7                           cmInfLink7                 7
+  Link 8                           cmInfLink8                 8
+  Link 9                           cmInfLink9                 9
+
+## Windows
+  Size/move                        cmeResize                  Ctrl+F5
+  Zoom                             cmeZoom                    F5
+  Next                             cmeNext                    F6
+  Previous                         cmePrev                    Shift+F6
+  Close                            cmeClose                   Alt+F3
+  List                             cmeListWin                 Alt+0
+  Project Window                   cmeSelWinPrj               Alt+1
+
+## Help
+  How to use the help              cmInfHelp                  Ctrl+H

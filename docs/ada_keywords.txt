@@ -1,0 +1,26 @@
+# Ada keyword list extracted from SETEdit cfgfiles/syntaxhl.shl (Name=Ada block)
+# Source set is Ada 95 (SETEdit is from 2004). 65 keywords.
+# Ready to pass to QsciLexerAda::setKeywords() / Scintilla SCLEX_ADA keyword set 0.
+
+# --- Ada 95 (as shipped by SETEdit) ---
+abort abs abstract accept access aliased all and array at begin body case
+constant declare delay delta digits do else elsif end entry exception exit
+for function generic goto if in is limited loop mod new not null of or others
+out package raise range record rem renames requeue return reverse select
+separate subtype tagged task terminate then type until use when while with xor
+
+# --- Modern additions NOT in SETEdit's list (add these for Ada 2005/2012/2022) ---
+# interface overriding synchronized   (Ada 2005)
+# parallel                            (Ada 2022)
+
+# Note: QScintilla ships QsciLexerAda with its own built-in keyword set already.
+# This file is the reference set to verify/override against, and to keep the
+# editor's highlighting identical to SETEdit if that matters for the UX.
+
+# SETEdit Ada lexing rules (from syntaxhl.shl) to reproduce in QScintilla:
+#   Files       = adb, ads
+#   EOLComment1 = --              (line comment)
+#   String1     = "              (string literal)
+#   String2     = '              (character literal)
+#   Symbols1    = ! & ( ) * + , - . / : ; < = > ? [ ] ^ { | } ~
+#   AllowedInsideNames = '       (apostrophe allowed inside attribute names e.g. X'Range)
