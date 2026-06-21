@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QFont>
 #include <QPalette>
 #include <QString>
 #include <QStringList>
@@ -139,6 +140,7 @@ private:
     void createMenus();
     void applyTheme();                       // app palette + all editors
     void applyEditorTheme(QsciScintilla *e); // QScintilla colours (not palette-driven)
+    void applyFonts();                        // interface font + editor/dock font
     void createTargetBar();
     void createDebugBar();
     void createDocks();
@@ -195,4 +197,10 @@ private:
     bool m_darkMode = false;
     QString m_defaultStyle;
     QPalette m_lightPalette;
+
+    // Fonts. The interface font drives the app chrome (menus, titles, dialogs);
+    // the editor font (monospaced by default) is forced onto the editors and the
+    // dock content widgets so they stay fixed-width regardless of interface font.
+    QFont m_interfaceFont;
+    QFont m_editorFont;
 };

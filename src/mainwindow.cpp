@@ -117,10 +117,18 @@ QString exampleOf(const QString &root, const QString &file)
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     // Remember the default look so light mode restores exactly, then load the
-    // persisted preference (applied near the end, once the UI exists).
+    // persisted preferences (applied near the end, once the UI exists).
     m_defaultStyle = qApp->style()->objectName();
     m_lightPalette = qApp->palette();
     m_darkMode = QSettings().value("ui/darkMode", false).toBool();
+
+    QSettings s;
+    m_interfaceFont = qApp->font();
+    if (const QString f = s.value("ui/interfaceFont").toString(); !f.isEmpty())
+        m_interfaceFont.fromString(f);
+    m_editorFont = QFont("monospace", 11);     // monospaced editor/dock default
+    if (const QString f = s.value("ui/editorFont").toString(); !f.isEmpty())
+        m_editorFont.fromString(f);
 
     m_tabs = new QTabWidget(this);
     m_tabs->setTabsClosable(true);
@@ -152,6 +160,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     resize(1200, 800);
     newFile();
     applyTheme();                        // honour the saved dark-mode preference
+    applyFonts();                        // honour the saved font preferences
     statusBar()->showMessage(tr("Ready"));
 }
 
@@ -421,6 +430,37 @@ void MainWindow::openSettings()
     dark->setChecked(m_darkMode);
     layout->addWidget(dark);
 
+    // Working copies edited by the font choosers; committed only on OK.
+    QFont interfaceFont = m_interfaceFont;
+    QFont editorFont = m_editorFont;
+
+    auto describe = [](const QFont &f) {
+        return QStringLiteral("%1 %2").arg(f.family()).arg(f.pointSize());
+    };
+
+    // A label + "Change..." button bound to a font; updates the working copy.
+    auto addFontRow = [&](const QString &caption, QFont *target,
+                          QFontDialog::FontDialogOptions opts) {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(caption, &dlg));
+        auto *value = new QLabel(describe(*target), &dlg);
+        value->setStyleSheet("font-weight:bold;");
+        row->addWidget(value, 1);
+        auto *btn = new QPushButton(tr("Change..."), &dlg);
+        row->addWidget(btn);
+        layout->addLayout(row);
+        connect(btn, &QPushButton::clicked, &dlg, [&dlg, target, value, describe, opts] {
+            bool ok = false;
+            const QFont f = QFontDialog::getFont(&ok, *target, &dlg, QString(), opts);
+            if (ok) { *target = f; value->setText(describe(f)); }
+        });
+    };
+
+    addFontRow(tr("Interface font (menus, titles):"), &interfaceFont,
+               QFontDialog::FontDialogOptions());
+    addFontRow(tr("Editor && dock font:"), &editorFont,
+               QFontDialog::MonospacedFonts);   // preselect fixed-width faces
+
     auto *buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     layout->addWidget(buttons);
@@ -429,10 +469,18 @@ void MainWindow::openSettings()
 
     if (dlg.exec() != QDialog::Accepted) return;
 
+    QSettings s;
     if (dark->isChecked() != m_darkMode) {
         m_darkMode = dark->isChecked();
-        QSettings().setValue("ui/darkMode", m_darkMode);
+        s.setValue("ui/darkMode", m_darkMode);
         applyTheme();
+    }
+    if (interfaceFont != m_interfaceFont || editorFont != m_editorFont) {
+        m_interfaceFont = interfaceFont;
+        m_editorFont = editorFont;
+        s.setValue("ui/interfaceFont", m_interfaceFont.toString());
+        s.setValue("ui/editorFont", m_editorFont.toString());
+        applyFonts();
     }
 }
 
@@ -474,7 +522,7 @@ void MainWindow::applyTheme()
 // Editor colours (Scintilla manages its own; it does not follow QPalette).
 void MainWindow::applyEditorTheme(QsciScintilla *e)
 {
-    applyAdaLexer(e, QFont("monospace", 11), m_darkMode);
+    applyAdaLexer(e, m_editorFont, m_darkMode);
     if (m_darkMode) {
         e->setCaretLineBackgroundColor(QColor("#2a2d2e"));
         e->setCaretForegroundColor(QColor("#d4d4d4"));
@@ -496,6 +544,30 @@ void MainWindow::applyEditorTheme(QsciScintilla *e)
         e->setMatchedBraceForegroundColor(QColor("#0000ff"));
         e->setMatchedBraceBackgroundColor(QColor("#cce8ff"));
     }
+}
+
+// The interface font becomes the application default (menus, titles, dialogs,
+// tab bar, dock titles); the editor font is then forced onto the editors and
+// the dock *content* widgets so they keep their own (monospaced) face.
+void MainWindow::applyFonts()
+{
+    qApp->setFont(m_interfaceFont);
+
+    auto setFontIf = [this](QWidget *w) { if (w) w->setFont(m_editorFont); };
+    setFontIf(m_output);
+    setFontIf(m_debugConsole);
+    setFontIf(m_debugInput);
+    setFontIf(m_tree);
+    setFontIf(m_bpList);
+    setFontIf(m_varsTree);
+    setFontIf(m_watchInput);
+    setFontIf(m_threadsList);
+    setFontIf(m_stackList);
+    setFontIf(m_problemsList);
+
+    for (int i = 0; i < m_tabs->count(); ++i)
+        if (auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(i)))
+            applyEditorTheme(e);     // re-applies the lexer with m_editorFont
 }
 
 void MainWindow::createTargetBar()
