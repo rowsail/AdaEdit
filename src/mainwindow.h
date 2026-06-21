@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QPalette>
 #include <QString>
 #include <QStringList>
 #include <QHash>
@@ -49,6 +50,7 @@ private slots:
     bool saveFile();
     bool saveFileAs();
     void closeTab(int index);
+    void openSettings();
 
     // Edit
     void undo();
@@ -135,6 +137,8 @@ private:
     QString editorPath(QsciScintilla *e) const;
 
     void createMenus();
+    void applyTheme();                       // app palette + all editors
+    void applyEditorTheme(QsciScintilla *e); // QScintilla colours (not palette-driven)
     void createTargetBar();
     void createDebugBar();
     void createDocks();
@@ -186,4 +190,9 @@ private:
 
     QString m_lastSearch;
     Project m_project;
+
+    // Appearance. Captured at startup so light mode can be restored exactly.
+    bool m_darkMode = false;
+    QString m_defaultStyle;
+    QPalette m_lightPalette;
 };

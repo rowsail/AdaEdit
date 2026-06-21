@@ -38,7 +38,7 @@ const char *kAdaKeywords =
     "synchronized tagged task terminate then type until use when while with xor";
 }
 
-void applyAdaLexer(QsciScintilla *e, const QFont &baseFont)
+void applyAdaLexer(QsciScintilla *e, const QFont &baseFont, bool dark)
 {
     auto set = [&](unsigned int msg, unsigned long w, long l) {
         e->SendScintilla(msg, w, l);
@@ -50,28 +50,44 @@ void applyAdaLexer(QsciScintilla *e, const QFont &baseFont)
         set(QsciScintilla::SCI_STYLESETBOLD, (unsigned long)style, on ? 1 : 0);
     };
 
-    // Base font on every style, then select the Ada lexer and feed keywords.
+    // Background (paper) and default text for the whole control. Seed the
+    // template style 32 (STYLE_DEFAULT) with the font + theme colours, then
+    // SCI_STYLECLEARALL copies it to every style so the paper is uniform; the
+    // per-syntax foregrounds below override just the text colour.
+    const QColor bg = dark ? QColor("#1e1e1e") : QColor("#ffffff");
+    const QColor fg = dark ? QColor("#d4d4d4") : QColor("#000000");
     const QByteArray fam = baseFont.family().toUtf8();
-    for (int s = 0; s <= SCE_ADA_ILLEGAL; ++s) {
-        e->SendScintilla(QsciScintilla::SCI_STYLESETFONT, (unsigned long)s, fam.constData());
-        set(QsciScintilla::SCI_STYLESETSIZE, (unsigned long)s, baseFont.pointSize());
-    }
+    e->SendScintilla(QsciScintilla::SCI_STYLESETFONT,
+                     (unsigned long)QsciScintilla::STYLE_DEFAULT, fam.constData());
+    set(QsciScintilla::SCI_STYLESETSIZE, QsciScintilla::STYLE_DEFAULT, baseFont.pointSize());
+    set(QsciScintilla::SCI_STYLESETFORE, QsciScintilla::STYLE_DEFAULT, sciColour(fg));
+    set(QsciScintilla::SCI_STYLESETBACK, QsciScintilla::STYLE_DEFAULT, sciColour(bg));
+    set(QsciScintilla::SCI_STYLECLEARALL, 0, 0);
+
     set(QsciScintilla::SCI_SETLEXER, QsciScintilla::SCLEX_ADA, 0);
     e->SendScintilla(QsciScintilla::SCI_SETKEYWORDS, 0UL, kAdaKeywords);
 
-    // Colour scheme (light background).
-    styleColour(SCE_ADA_DEFAULT,      QColor("#000000"));
-    styleColour(SCE_ADA_WORD,         QColor("#0000c0")); styleBold(SCE_ADA_WORD, true);
-    styleColour(SCE_ADA_IDENTIFIER,   QColor("#000000"));
-    styleColour(SCE_ADA_NUMBER,       QColor("#008000"));
-    styleColour(SCE_ADA_DELIMITER,    QColor("#404040"));
-    styleColour(SCE_ADA_CHARACTER,    QColor("#a00050"));
-    styleColour(SCE_ADA_CHARACTEREOL, QColor("#a00050"));
-    styleColour(SCE_ADA_STRING,       QColor("#a00050"));
-    styleColour(SCE_ADA_STRINGEOL,    QColor("#a00050"));
-    styleColour(SCE_ADA_LABEL,        QColor("#7f0000"));
-    styleColour(SCE_ADA_COMMENTLINE,  QColor("#808080"));
-    styleColour(SCE_ADA_ILLEGAL,      QColor("#ff0000"));
+    // Syntax foreground palette: a light scheme, or a dark (VS Code-like) one.
+    const QColor cWord    = dark ? QColor("#569cd6") : QColor("#0000c0");
+    const QColor cNumber  = dark ? QColor("#b5cea8") : QColor("#008000");
+    const QColor cDelim   = dark ? QColor("#d4d4d4") : QColor("#404040");
+    const QColor cString  = dark ? QColor("#ce9178") : QColor("#a00050");
+    const QColor cLabel   = dark ? QColor("#c586c0") : QColor("#7f0000");
+    const QColor cComment = dark ? QColor("#6a9955") : QColor("#808080");
+    const QColor cIllegal = dark ? QColor("#f44747") : QColor("#ff0000");
+
+    styleColour(SCE_ADA_DEFAULT,      fg);
+    styleColour(SCE_ADA_WORD,         cWord); styleBold(SCE_ADA_WORD, true);
+    styleColour(SCE_ADA_IDENTIFIER,   fg);
+    styleColour(SCE_ADA_NUMBER,       cNumber);
+    styleColour(SCE_ADA_DELIMITER,    cDelim);
+    styleColour(SCE_ADA_CHARACTER,    cString);
+    styleColour(SCE_ADA_CHARACTEREOL, cString);
+    styleColour(SCE_ADA_STRING,       cString);
+    styleColour(SCE_ADA_STRINGEOL,    cString);
+    styleColour(SCE_ADA_LABEL,        cLabel);
+    styleColour(SCE_ADA_COMMENTLINE,  cComment);
+    styleColour(SCE_ADA_ILLEGAL,      cIllegal);
 
     e->SendScintilla(QsciScintilla::SCI_COLOURISE, 0UL, -1L);
 }

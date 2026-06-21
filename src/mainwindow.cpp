@@ -116,6 +116,12 @@ QString exampleOf(const QString &root, const QString &file)
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
+    // Remember the default look so light mode restores exactly, then load the
+    // persisted preference (applied near the end, once the UI exists).
+    m_defaultStyle = qApp->style()->objectName();
+    m_lightPalette = qApp->palette();
+    m_darkMode = QSettings().value("ui/darkMode", false).toBool();
+
     m_tabs = new QTabWidget(this);
     m_tabs->setTabsClosable(true);
     m_tabs->setMovable(true);
@@ -145,6 +151,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     resize(1200, 800);
     newFile();
+    applyTheme();                        // honour the saved dark-mode preference
     statusBar()->showMessage(tr("Ready"));
 }
 
@@ -254,7 +261,7 @@ void MainWindow::createDocks()
 QsciScintilla *MainWindow::newEditor()
 {
     auto *e = new QsciScintilla(this);
-    applyAdaLexer(e, QFont("monospace", 11));
+    applyEditorTheme(e);                 // lexer + light/dark colours
     e->setUtf8(true);
     e->setTabWidth(3);
     e->setIndentationsUseTabs(false);
@@ -337,6 +344,8 @@ void MainWindow::createMenus()
     file->addAction(tr("&Save"), this, &MainWindow::saveFile, QKeySequence(Qt::Key_F2));
     file->addAction(tr("Save &as..."), this, &MainWindow::saveFileAs, QKeySequence::SaveAs);
     file->addSeparator();
+    file->addAction(tr("Se&ttings..."), this, &MainWindow::openSettings);
+    file->addSeparator();
     file->addAction(tr("E&xit"), this, &QWidget::close, QKeySequence(Qt::ALT | Qt::Key_X));
 
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
@@ -398,6 +407,95 @@ void MainWindow::createMenus()
     m_actSmp->setCheckable(true);
     m_actSmp->setToolTip(tr("Debug both LX7 cores as gdb threads (applies on next Start)"));
     connect(m_actSmp, &QAction::toggled, this, &MainWindow::onSmpToggled);
+}
+
+// ---- Settings / appearance ----------------------------------------------
+
+void MainWindow::openSettings()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Settings"));
+    auto *layout = new QVBoxLayout(&dlg);
+
+    auto *dark = new QCheckBox(tr("Dark mode"), &dlg);
+    dark->setChecked(m_darkMode);
+    layout->addWidget(dark);
+
+    auto *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    if (dark->isChecked() != m_darkMode) {
+        m_darkMode = dark->isChecked();
+        QSettings().setValue("ui/darkMode", m_darkMode);
+        applyTheme();
+    }
+}
+
+// Apply the application-wide palette and re-theme every open editor. The Qt
+// chrome (menus, docks, dialogs, tree, output panes) follows QPalette; the
+// QScintilla editors do not, so they are recoloured explicitly.
+void MainWindow::applyTheme()
+{
+    if (m_darkMode) {
+        qApp->setStyle(QStyleFactory::create("Fusion"));
+        QPalette p;
+        p.setColor(QPalette::Window,          QColor(45, 45, 45));
+        p.setColor(QPalette::WindowText,      QColor(220, 220, 220));
+        p.setColor(QPalette::Base,            QColor(30, 30, 30));
+        p.setColor(QPalette::AlternateBase,   QColor(45, 45, 45));
+        p.setColor(QPalette::ToolTipBase,     QColor(45, 45, 45));
+        p.setColor(QPalette::ToolTipText,     QColor(220, 220, 220));
+        p.setColor(QPalette::Text,            QColor(220, 220, 220));
+        p.setColor(QPalette::Button,          QColor(53, 53, 53));
+        p.setColor(QPalette::ButtonText,      QColor(220, 220, 220));
+        p.setColor(QPalette::BrightText,      Qt::red);
+        p.setColor(QPalette::Link,            QColor(42, 130, 218));
+        p.setColor(QPalette::Highlight,       QColor(38, 79, 120));
+        p.setColor(QPalette::HighlightedText, Qt::white);
+        p.setColor(QPalette::Disabled, QPalette::Text,       QColor(127, 127, 127));
+        p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
+        p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
+        qApp->setPalette(p);
+    } else {
+        qApp->setStyle(QStyleFactory::create(m_defaultStyle));
+        qApp->setPalette(m_lightPalette);
+    }
+
+    for (int i = 0; i < m_tabs->count(); ++i)
+        if (auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(i)))
+            applyEditorTheme(e);
+}
+
+// Editor colours (Scintilla manages its own; it does not follow QPalette).
+void MainWindow::applyEditorTheme(QsciScintilla *e)
+{
+    applyAdaLexer(e, QFont("monospace", 11), m_darkMode);
+    if (m_darkMode) {
+        e->setCaretLineBackgroundColor(QColor("#2a2d2e"));
+        e->setCaretForegroundColor(QColor("#d4d4d4"));
+        e->setSelectionBackgroundColor(QColor("#264f78"));
+        e->setSelectionForegroundColor(QColor("#ffffff"));
+        e->setMarginsBackgroundColor(QColor("#252526"));
+        e->setMarginsForegroundColor(QColor("#858585"));
+        e->setFoldMarginColors(QColor("#3c3c3c"), QColor("#252526"));
+        e->setMatchedBraceForegroundColor(QColor("#ffd700"));
+        e->setMatchedBraceBackgroundColor(QColor("#264f78"));
+    } else {
+        e->setCaretLineBackgroundColor(QColor("#eef6ff"));
+        e->setCaretForegroundColor(QColor("#000000"));
+        e->setSelectionBackgroundColor(QColor("#cce8ff"));
+        e->setSelectionForegroundColor(QColor("#000000"));
+        e->setMarginsBackgroundColor(QColor("#f0f0f0"));
+        e->setMarginsForegroundColor(QColor("#808080"));
+        e->setFoldMarginColors(QColor("#e0e0e0"), QColor("#f0f0f0"));
+        e->setMatchedBraceForegroundColor(QColor("#0000ff"));
+        e->setMatchedBraceBackgroundColor(QColor("#cce8ff"));
+    }
 }
 
 void MainWindow::createTargetBar()
