@@ -15,6 +15,7 @@ struct CmdContext {
     QString repo;
     QString file;
     QString example;
+    QString profile;     // selected Ada runtime profile -> {profile} (./x --profile)
 };
 
 // One processor target: the configurable commands the editor runs for it

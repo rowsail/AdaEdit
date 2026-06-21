@@ -9,7 +9,6 @@
 #include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
-#include <QRegularExpression>
 
 #include <algorithm>
 
@@ -781,15 +780,19 @@ void MainWindow::createActionBar()
     bar->setObjectName("actionBar");     // stable id for saveState/restoreState
     bar->setMovable(false);
 
-    // Ada runtime profile: read from / written back to the project .gpr.
+    // Ada runtime profile passed to the ./x launcher as --profile {profile}.
+    // "auto" lets ./x use each example's own profile.
     bar->addWidget(new QLabel(tr("Profile: "), bar));
     m_profileCombo = new QComboBox(bar);
-    // Friendly label shown to the user -> raw value written to the .gpr / ADA_PROFILE.
+    m_profileCombo->addItem(tr("Auto (example default)"), QStringLiteral("auto"));
     m_profileCombo->addItem(tr("Jorvik (light-tasking)"), QStringLiteral("light-tasking"));
     m_profileCombo->addItem(tr("Embedded"),               QStringLiteral("embedded"));
     m_profileCombo->addItem(tr("Full"),                   QStringLiteral("full"));
-    m_profileCombo->setEnabled(false);   // enabled once a .gpr is loaded
-    m_profileCombo->setToolTip(tr("Ada runtime profile (open a project folder with a .gpr)"));
+    m_profileCombo->setToolTip(tr("Ada runtime profile for build/run (./x --profile)"));
+    m_profile = QSettings().value("buildProfile", "auto").toString();
+    const int pidx = m_profileCombo->findData(m_profile);
+    m_profileCombo->setCurrentIndex(pidx < 0 ? 0 : pidx);
+    m_profile = m_profileCombo->currentData().toString();
     connect(m_profileCombo, qOverload<int>(&QComboBox::activated),
             this, &MainWindow::onProfileChanged);
     bar->addWidget(m_profileCombo);
@@ -801,95 +804,13 @@ void MainWindow::createActionBar()
     bar->addAction(tr("Monitor"), this, &MainWindow::doMonitor);
 }
 
-// ---- Ada runtime profile (in the project .gpr) ---------------------------
-
-QString MainWindow::gprText() const
-{
-    // Prefer the live editor buffer if the .gpr is open, so we never clobber
-    // unsaved edits or read stale text.
-    if (QsciScintilla *e = editorForPath(m_gprPath)) return e->text();
-    QFile f(m_gprPath);
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text))
-        return QString::fromUtf8(f.readAll());
-    return QString();
-}
-
-QString MainWindow::gprProfileValue() const
-{
-    static const QRegularExpression re(R"RX(\bProfile\s*:=\s*"([^"]*)")RX",
-                                       QRegularExpression::CaseInsensitiveOption);
-    const QRegularExpressionMatch m = re.match(gprText());
-    return m.hasMatch() ? m.captured(1) : QString();
-}
-
-void MainWindow::loadProfileFromGpr()
-{
-    m_gprPath = m_project.rootPath.isEmpty() ? QString() : findGpr(m_project.rootPath);
-    QSignalBlocker block(m_profileCombo);
-    if (m_gprPath.isEmpty()) {
-        m_profileCombo->setEnabled(false);
-        m_profileCombo->setCurrentIndex(-1);
-        m_profileCombo->setToolTip(tr("No .gpr in the project — cannot set a profile"));
-        m_profile.clear();
-        return;
-    }
-    m_profileCombo->setEnabled(true);
-    const QString val = gprProfileValue();
-    const int idx = m_profileCombo->findData(val);
-    m_profileCombo->setCurrentIndex(idx);          // -1 (blank) if not set/unknown
-    m_profile = idx >= 0 ? val : QString();
-    const QString gpr = QFileInfo(m_gprPath).fileName();
-    m_profileCombo->setToolTip(idx >= 0
-        ? tr("Ada runtime profile (Profile := in %1)").arg(gpr)
-        : tr("No recognised Profile in %1 — pick one to add it").arg(gpr));
-}
-
-bool MainWindow::writeGprProfile(const QString &value)
-{
-    if (m_gprPath.isEmpty()) return false;
-    QString text = gprText();
-
-    static const QRegularExpression assign(R"RX((\bProfile\s*:=\s*")[^"]*("))RX",
-                                           QRegularExpression::CaseInsensitiveOption);
-    const QRegularExpressionMatch m = assign.match(text);
-    if (m.hasMatch()) {
-        text.replace(m.capturedStart(), m.capturedLength(),
-                     m.captured(1) + value + m.captured(2));
-    } else {
-        // No assignment yet: insert one just after the `project ... is` header.
-        static const QRegularExpression header(
-            R"(^[^\n]*\bproject\b[^\n]*\bis\b[^\n]*$)",
-            QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption);
-        const QRegularExpressionMatch h = header.match(text);
-        if (!h.hasMatch()) return false;            // can't place it safely
-        text.insert(h.capturedEnd(),
-            QStringLiteral("\n   Profile := \"%1\";   --  light-tasking | embedded | full")
-                .arg(value));
-    }
-
-    // Keep an open buffer in sync, then persist to disk.
-    if (QsciScintilla *e = editorForPath(m_gprPath)) {
-        e->setText(text);
-        e->setModified(false);
-    }
-    QFile f(m_gprPath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
-    f.write(text.toUtf8());
-    return true;
-}
+// ---- Ada runtime profile (./x --profile) ---------------------------------
 
 void MainWindow::onProfileChanged(int)
 {
-    const QString value = m_profileCombo->currentData().toString();
-    if (value.isEmpty() || m_gprPath.isEmpty()) return;
-    if (!writeGprProfile(value)) {
-        statusBar()->showMessage(tr("Could not write profile to %1").arg(m_gprPath), 5000);
-        loadProfileFromGpr();          // resync the combo with the file
-        return;
-    }
-    m_profile = value;
-    statusBar()->showMessage(
-        tr("Ada profile set to \"%1\" in %2").arg(value, QFileInfo(m_gprPath).fileName()), 4000);
+    m_profile = m_profileCombo->currentData().toString();
+    QSettings().setValue("buildProfile", m_profile);
+    statusBar()->showMessage(tr("Build profile: %1").arg(m_profile), 3000);
 }
 
 void MainWindow::createDebugBar()
@@ -967,7 +888,6 @@ void MainWindow::openFolderPath(const QString &path)
             statusBar()->showMessage(tr("Loaded project %1").arg(proj), 3000);
     }
     m_project.rootPath = path;             // load() doesn't set rootPath
-    loadProfileFromGpr();
     updateTitle();
     updateDebugActions();
     setWindowFilePath(path);
@@ -1474,7 +1394,6 @@ void MainWindow::openProject()
     }
     if (m_project.rootPath.isEmpty())
         m_project.rootPath = QFileInfo(path).absolutePath();
-    loadProfileFromGpr();
     updateTitle();
     updateDebugActions();
     statusBar()->showMessage(tr("Opened %1").arg(path), 3000);
@@ -1532,9 +1451,17 @@ CmdContext MainWindow::ctxForCurrent() const
     // Repo root (launcher/tools) above the opened folder, for {repo}.
     ctx.repo = findRepoRoot(ctx.file.isEmpty() ? ctx.root : ctx.file);
 
-    // Still provided for repo-root/./x style setups that opt back in.
+    // The ./x example argument: derived from the current file's path, or (when
+    // no example file is open) from the opened folder if it sits under examples/.
     ctx.example = exampleOf(findRepoRoot(ctx.file.isEmpty() ? ctx.root : ctx.file),
                             ctx.file);
+    if (ctx.example.isEmpty() && !ctx.root.isEmpty()) {
+        QDir rd(ctx.root);
+        const QString name = rd.dirName();
+        if (rd.cdUp() && rd.dirName() == "examples") ctx.example = name;
+    }
+
+    ctx.profile = m_profile;            // toolbar selector -> {profile} / --profile
     return ctx;
 }
 
@@ -1552,11 +1479,8 @@ void MainWindow::runAction(const QString &cmdTemplate, const QString &what)
     const QString cmd = TargetProfile::expand(cmdTemplate, ctx);
     const QString cwd = ctx.root.isEmpty() ? QDir::currentPath() : ctx.root;
 
-    // The selected Ada runtime profile is exported so build scripts can use it.
-    const QString shown = m_profile.isEmpty()
-        ? cmd : QStringLiteral("ADA_PROFILE=%1 %2").arg(m_profile, cmd);
     m_output->clear();
-    m_output->appendPlainText(QStringLiteral("[%1] (%2)\n$ %3\n").arg(what, cwd, shown));
+    m_output->appendPlainText(QStringLiteral("[%1] (%2)\n$ %3\n").arg(what, cwd, cmd));
 
     if (!m_actionProc) {
         m_actionProc = new QProcess(this);
@@ -1566,9 +1490,6 @@ void MainWindow::runAction(const QString &cmdTemplate, const QString &what)
         connect(m_actionProc, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
                 this, [this](int code, QProcess::ExitStatus) { onActionFinished(code); });
     }
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    if (!m_profile.isEmpty()) env.insert("ADA_PROFILE", m_profile);
-    m_actionProc->setProcessEnvironment(env);
     m_actionProc->setWorkingDirectory(cwd);
     m_actionProc->start("/bin/sh", {"-c", cmd});
 }

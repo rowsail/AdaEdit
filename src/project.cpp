@@ -12,6 +12,7 @@ QString TargetProfile::expand(const QString &cmd, const CmdContext &ctx)
     out.replace("{root}", ctx.root);
     out.replace("{repo}", ctx.repo.isEmpty() ? ctx.root : ctx.repo);
     out.replace("{example}", ctx.example);
+    out.replace("{profile}", ctx.profile.isEmpty() ? QStringLiteral("auto") : ctx.profile);
     if (!ctx.file.isEmpty()) {
         QFileInfo fi(ctx.file);
         const QString dir  = fi.absolutePath();
@@ -31,11 +32,13 @@ Project Project::makeDefault()
     TargetProfile esp;
     esp.name               = "ESP32-S3";
     esp.description        = "Ada bare-metal ESP32-S3 (opened folder)";
-    // Build the project folder we are in, using its own scripts.
-    esp.buildCommand       = "bash build.sh";
-    esp.flashCommand       = "bash flash.sh";
-    esp.runCommand         = "bash build.sh && bash flash.sh";
-    esp.monitorCommand     = "";                         // set per project if needed
+    // Drive the repo's ./x launcher; {profile} comes from the toolbar selector
+    // (auto = the example's own profile). ./x maps it to ESP32S3_RTS_PROFILE.
+    esp.buildCommand       = "bash {repo}/x build {example} --profile {profile}";
+    esp.flashCommand       = "bash {repo}/x build {example} --profile {profile} && "
+                             "bash {repo}/x flash {example}";
+    esp.runCommand         = "bash {repo}/x run {example} --profile {profile}";
+    esp.monitorCommand     = "bash {repo}/x monitor";
     esp.debugServerCommand = "bash {repo}/tools/openocd.sh";  // OpenOCD -> gdb server :3333
     // Repo-fetched gdb (not on PATH); same one ./x uses.
     esp.gdbCommand         = "{repo}/tools/gdb/xtensa-esp-elf-gdb/bin/xtensa-esp32s3-elf-gdb";

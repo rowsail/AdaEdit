@@ -173,13 +173,6 @@ private:
     void updateDebugActions();
     void startDebugSession(bool attach);
 
-    // Ada runtime profile (light-tasking/embedded/full), stored as
-    // `Profile := "...";` in the project .gpr and exported as ADA_PROFILE.
-    void loadProfileFromGpr();            // .gpr -> combo
-    bool writeGprProfile(const QString &value);   // combo -> .gpr (+ open tab)
-    QString gprText() const;              // current .gpr text (open buffer or disk)
-    QString gprProfileValue() const;      // parse the Profile assignment
-
     CmdContext ctxForCurrent() const;
     void runAction(const QString &cmdTemplate, const QString &what);
     void showDebugLine(const QString &fullPath, int line);
@@ -189,8 +182,7 @@ private:
     QList<QDockWidget *> m_docks;         // all docks, for the View menu toggles
     QList<Command> m_commands;            // all rebindable commands (keyboard map)
     QComboBox *m_profileCombo = nullptr;  // Ada runtime profile selector
-    QString m_gprPath;                    // .gpr holding the Profile assignment
-    QString m_profile;                    // current profile value (for ADA_PROFILE)
+    QString m_profile;                    // selected profile -> ./x --profile {profile}
     QPlainTextEdit *m_output = nullptr;
     // (no target picker: this editor is ESP32-S3-only)
     QPlainTextEdit *m_debugConsole = nullptr;
