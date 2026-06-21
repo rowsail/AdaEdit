@@ -11,6 +11,7 @@
 #include "lspclient.h"
 
 class QTabWidget;
+class QDockWidget;
 class QPlainTextEdit;
 class QComboBox;
 class QTreeView;
@@ -156,6 +157,7 @@ private:
     void clearDebugLine();
 
     QTabWidget *m_tabs = nullptr;
+    QList<QDockWidget *> m_docks;         // all docks, for the View menu toggles
     QPlainTextEdit *m_output = nullptr;
     QPlainTextEdit *m_debugConsole = nullptr;
     QLineEdit *m_debugInput = nullptr;

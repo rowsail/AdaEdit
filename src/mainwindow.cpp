@@ -267,6 +267,9 @@ void MainWindow::createDocks()
     auto *probDock = new QDockWidget(tr("Problems"), this);
     probDock->setWidget(m_problemsList);
     addDockWidget(Qt::BottomDockWidgetArea, probDock);
+
+    // Ordered list backing the View menu's show/hide toggles.
+    m_docks = {explorer, outDock, dbgDock, bpDock, varsDock, thrDock, stackDock, probDock};
 }
 
 // ---- editor factory ------------------------------------------------------
@@ -368,6 +371,13 @@ void MainWindow::createMenus()
     edit->addAction(tr("Cu&t"), this, &MainWindow::cut, QKeySequence(Qt::SHIFT | Qt::Key_Delete));
     edit->addAction(tr("&Copy"), this, &MainWindow::copy, QKeySequence(Qt::CTRL | Qt::Key_Insert));
     edit->addAction(tr("&Paste"), this, &MainWindow::paste, QKeySequence(Qt::SHIFT | Qt::Key_Insert));
+
+    // View: one checkable entry per dock. QDockWidget::toggleViewAction() is
+    // already checkable, shows/hides the dock, and unticks itself when the dock
+    // is closed via its title-bar X — so re-ticking it brings the dock back.
+    QMenu *view = menuBar()->addMenu(tr("&View"));
+    for (QDockWidget *dock : m_docks)
+        view->addAction(dock->toggleViewAction());
 
     QMenu *search = menuBar()->addMenu(tr("&Search"));
     search->addAction(tr("&Find..."), this, &MainWindow::find,
