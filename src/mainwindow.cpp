@@ -784,7 +784,10 @@ void MainWindow::createActionBar()
     // Ada runtime profile: read from / written back to the project .gpr.
     bar->addWidget(new QLabel(tr("Profile: "), bar));
     m_profileCombo = new QComboBox(bar);
-    m_profileCombo->addItems({"light-tasking", "embedded", "full"});
+    // Friendly label shown to the user -> raw value written to the .gpr / ADA_PROFILE.
+    m_profileCombo->addItem(tr("Jorvik (light-tasking)"), QStringLiteral("light-tasking"));
+    m_profileCombo->addItem(tr("Embedded"),               QStringLiteral("embedded"));
+    m_profileCombo->addItem(tr("Full"),                   QStringLiteral("full"));
     m_profileCombo->setEnabled(false);   // enabled once a .gpr is loaded
     m_profileCombo->setToolTip(tr("Ada runtime profile (open a project folder with a .gpr)"));
     connect(m_profileCombo, qOverload<int>(&QComboBox::activated),
@@ -832,8 +835,8 @@ void MainWindow::loadProfileFromGpr()
     }
     m_profileCombo->setEnabled(true);
     const QString val = gprProfileValue();
-    const int idx = m_profileCombo->findText(val);
-    m_profileCombo->setCurrentIndex(idx);          // -1 (blank) if not set yet
+    const int idx = m_profileCombo->findData(val);
+    m_profileCombo->setCurrentIndex(idx);          // -1 (blank) if not set/unknown
     m_profile = idx >= 0 ? val : QString();
     const QString gpr = QFileInfo(m_gprPath).fileName();
     m_profileCombo->setToolTip(idx >= 0
@@ -877,7 +880,7 @@ bool MainWindow::writeGprProfile(const QString &value)
 
 void MainWindow::onProfileChanged(int)
 {
-    const QString value = m_profileCombo->currentText();
+    const QString value = m_profileCombo->currentData().toString();
     if (value.isEmpty() || m_gprPath.isEmpty()) return;
     if (!writeGprProfile(value)) {
         statusBar()->showMessage(tr("Could not write profile to %1").arg(m_gprPath), 5000);
