@@ -1599,8 +1599,12 @@ void MainWindow::openProject()
                              tr("Cannot open %1:\n%2").arg(path, err));
         return;
     }
-    if (m_project.rootPath.isEmpty())
-        m_project.rootPath = QFileInfo(path).absolutePath();
+    // The project lives where its file does (rootPath isn't serialized, and
+    // load() leaves the previous project's rootPath untouched -- so set it here).
+    m_project.rootPath = QFileInfo(path).absolutePath();
+    m_tree->setRootIndex(m_fsModel->setRootPath(m_project.rootPath));   // repoint explorer
+    const QString main = QDir(m_project.rootPath).filePath("src/main.adb");
+    if (QFileInfo::exists(main)) openOrActivate(main);
     updateTitle();
     updateDebugActions();
     statusBar()->showMessage(tr("Opened %1").arg(path), 3000);
