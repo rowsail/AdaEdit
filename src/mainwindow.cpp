@@ -10,6 +10,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QRegularExpression>
+#include <QClipboard>
 
 #include <algorithm>
 
@@ -456,6 +457,8 @@ void MainWindow::createMenus()
     build->addSeparator();
     registerCmd(build->addAction(tr("Show runtime &path"), this, &MainWindow::showRuntimePath),
                 "build.runtimePath");
+    registerCmd(build->addAction(tr("Set up &device access…"), this, &MainWindow::setupDevice),
+                "build.setupDevice");
 
     QMenu *debug = menuBar()->addMenu(tr("&Debug"));
     m_actStart    = debug->addAction(tr("Start &debugging"), this, &MainWindow::debugStart);
@@ -1600,6 +1603,8 @@ void MainWindow::runAction(const QString &cmdTemplate, const QString &what)
     const QString cwd = ctx.root.isEmpty() ? QDir::currentPath() : ctx.root;
 
     m_output->clear();
+    m_actionLog.clear();
+    m_actionWhat = what;
     m_output->appendPlainText(QStringLiteral("[%1] (%2)\n$ %3\n").arg(what, cwd, cmd));
 
     if (!m_actionProc) {
@@ -1636,15 +1641,86 @@ void MainWindow::doMonitor()
 
 void MainWindow::onActionOutput()
 {
-    if (m_actionProc)
-        m_output->appendPlainText(
-            QString::fromLocal8Bit(m_actionProc->readAllStandardOutput()).trimmed());
+    if (!m_actionProc) return;
+    const QString chunk = QString::fromLocal8Bit(m_actionProc->readAllStandardOutput());
+    m_actionLog += chunk;
+    m_output->appendPlainText(chunk.trimmed());
+}
+
+// A flash/run/monitor failed because the host blocks USB/serial access (the
+// modern-Linux device-permission tax).  Matches the SDK's stable "device not
+// accessible" marker plus the usual tool-level permission errors.
+static bool looksLikeDeviceAccessError(const QString &log)
+{
+    static const QRegularExpression re(
+        QStringLiteral("device not accessible"
+                       "|(/dev/tty\\S*|serial port|open port|open device).{0,40}"
+                       "(permission denied|access denied|denied)"
+                       "|permission denied.{0,40}(/dev/tty|ttyACM|ttyUSB)"
+                       "|LIBUSB_ERROR_ACCESS"
+                       "|unable to open (ftdi|usb) device"),
+        QRegularExpression::CaseInsensitiveOption);
+    return re.match(log).hasMatch();
 }
 
 void MainWindow::onActionFinished(int exitCode)
 {
     m_output->appendPlainText(tr("\n[exit %1]").arg(exitCode));
     statusBar()->showMessage(tr("Finished (exit %1)").arg(exitCode), 5000);
+
+    if (exitCode != 0 && looksLikeDeviceAccessError(m_actionLog)) {
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Warning);
+        box.setWindowTitle(tr("Device not accessible"));
+        box.setText(tr("%1 couldn't reach the board — the host is blocking USB/serial "
+                       "access.").arg(m_actionWhat.isEmpty() ? tr("That command") : m_actionWhat));
+        box.setInformativeText(
+            tr("This is a one-time host setup: install a udev rule and add you to the "
+               "device groups. It needs your password (administrator access).\n\n"
+               "Afterwards, unplug and replug the board."));
+        QPushButton *fix = box.addButton(tr("Set up device access…"), QMessageBox::AcceptRole);
+        box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(fix);
+        box.exec();
+        if (box.clickedButton() == fix) setupDevice();
+    }
+}
+
+void MainWindow::setupDevice()
+{
+    // The installer lives in the SDK tree: {repo}/tools/install-udev.sh.
+    const CmdContext ctx = ctxForCurrent();
+    QString repo = ctx.repo;
+    if (repo.isEmpty()) repo = ctx.root;
+    const QString installer = QDir(repo).filePath("tools/install-udev.sh");
+    if (repo.isEmpty() || !QFileInfo::exists(installer)) {
+        QMessageBox::warning(this, tr("Set up device access"),
+            tr("Couldn't find the device-setup script (tools/install-udev.sh) for this "
+               "project.\n\nOpen an ESP32-S3 project/SDK folder first, then try again."));
+        return;
+    }
+
+    // Prefer pkexec (graphical password prompt, runs the installer as root and
+    // passes PKEXEC_UID so it adds the right user to the groups).  The installer
+    // also self-escalates via sudo, but sudo needs a terminal we don't have here.
+    const QString pkexec = QStandardPaths::findExecutable("pkexec");
+    if (pkexec.isEmpty()) {
+        const QString cmd = QStringLiteral("sudo bash %1").arg(installer);
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Information);
+        box.setWindowTitle(tr("Set up device access"));
+        box.setText(tr("No graphical 'pkexec' is available, so this needs a terminal.\n\n"
+                       "Run this once, then unplug and replug the board:"));
+        box.setInformativeText(QStringLiteral("<pre>%1</pre>").arg(cmd.toHtmlEscaped()));
+        QPushButton *copy = box.addButton(tr("Copy command"), QMessageBox::ActionRole);
+        box.addButton(QMessageBox::Close);
+        box.exec();
+        if (box.clickedButton() == copy) QApplication::clipboard()->setText(cmd);
+        return;
+    }
+
+    // Stream the installer's output into the build pane via the normal action path.
+    runAction(QStringLiteral("pkexec bash %1").arg(installer), tr("Set up device access"));
 }
 
 // ---- Debug ---------------------------------------------------------------

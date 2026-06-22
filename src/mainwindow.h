@@ -101,6 +101,7 @@ private slots:
     void doRun();
     void doMonitor();
     void showRuntimePath();        // echo the resolved RTS path to the output pane
+    void setupDevice();            // run the one-time udev/groups installer (sudo/pkexec)
     void onActionOutput();
     void onActionFinished(int exitCode);
 
@@ -207,6 +208,8 @@ private:
     QTreeView *m_tree = nullptr;
     QFileSystemModel *m_fsModel = nullptr;
     class QProcess *m_actionProc = nullptr;
+    QString m_actionLog;            // accumulated action output (for device-error detection)
+    QString m_actionWhat;           // label of the running action ("Flash", "Run", …)
     Debugger *m_debugger = nullptr;
     LspClient *m_lsp = nullptr;
 

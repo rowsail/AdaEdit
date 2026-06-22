@@ -133,9 +133,10 @@ a udev rule without root**. So:
 
 This is the modern-Linux tax 80s Borland never paid: back then the OS let any
 program drive the serial/parallel port directly; today the kernel gates USB
-devices. It is one documented step, not a blocker. We can ship the udev rule + a
-one-line installer and surface a clear in-editor message when device access
-fails.
+devices. It is one documented step, not a blocker. **Phase 3 ships exactly this**:
+the udev rule + a self-escalating one-line installer (`./x setup-device`) and a
+clear in-editor "Set up device access…" prompt (auto-offered when a flash/run
+fails on permissions, runs the installer via `pkexec`).
 
 ## 7. Phasing / roadmap
 
@@ -159,8 +160,18 @@ fails.
   template + the toolchain referenced, sourcing the hook seeds the workspace and
   `x build gpio0_blink` produces `app.bin` there — offline, read-only template
   untouched.  The ~1.5 GB fetch+package itself runs in CI (Phase 4).
-- **Phase 3 — Device access.** Ship the udev rule + `sudo` installer and an
-  in-editor "device not accessible — run setup" path.
+- **Phase 3 — Device access. (DONE)** The SDK ships a udev rule
+  (`tools/60-esp32-ada.rules`: `uaccess` + `plugdev`/`dialout` fallback for the
+  Espressif USB-JTAG `303a` device and common CP210x/CH340/FTDI bridges) and a
+  self-escalating installer (`tools/install-udev.sh`, run via `./x setup-device`)
+  that drops the rule in `/etc/udev/rules.d`, reloads udev, and adds the user to
+  the device groups. `./x flash|monitor` now do a permission **preflight** and, on
+  failure, print a stable `device not accessible` marker; `./x check-device`
+  reports status. The editor matches that marker (plus the usual tool-level
+  `Permission denied`/`LIBUSB_ERROR_ACCESS` errors) on a failed Flash/Run and pops
+  a **"Device not accessible — Set up device access…"** dialog that runs the
+  installer via `pkexec` (graphical password prompt), falling back to showing the
+  `sudo` command. Also reachable any time via **Build ▸ Set up device access…**.
 - **Phase 4 — CI artifact. (DONE)** `.github/workflows/appimage.yml` builds the
   editor AppImage (~28 MB) on every push/PR and uploads it; a gated `full` job
   (version tag, or a manual run that ticks "full") installs Alire, runs
