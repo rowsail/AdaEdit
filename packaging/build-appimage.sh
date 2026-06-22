@@ -45,9 +45,9 @@ if [ "$BUNDLE" = full ]; then
 
     echo "  -- GNAT toolchains (Alire-fetched) -> opt/toolchains"
     command -v alr >/dev/null || { echo "need 'alr' to fetch toolchains" >&2; exit 1; }
-    alr toolchain --select "$GNAT_XTENSA_CRATE=$TOOLCHAIN_GNAT_VERSION" || true
-    alr toolchain --select "$GNAT_NATIVE_CRATE=$TOOLCHAIN_GNAT_VERSION" || true
-    alr toolchain --select "$GPRBUILD_CRATE=$TOOLCHAIN_GPRBUILD_VERSION" || true
+    alr -n toolchain --select "$GNAT_XTENSA_CRATE=$TOOLCHAIN_GNAT_VERSION" || true
+    alr -n toolchain --select "$GNAT_NATIVE_CRATE=$TOOLCHAIN_GNAT_VERSION" || true
+    alr -n toolchain --select "$GPRBUILD_CRATE=$TOOLCHAIN_GPRBUILD_VERSION" || true
     mkdir -p "$APPDIR/opt/toolchains"
     for d in "$HOME"/.local/share/alire/toolchains/gnat_xtensa_esp32_elf_* \
              "$HOME"/.local/share/alire/toolchains/gnat_native_* \
@@ -57,8 +57,14 @@ if [ "$BUNDLE" = full ]; then
 
     echo "  -- ada_language_server -> opt/als"
     mkdir -p "$APPDIR/opt/als"
-    curl -fsSL "$ALS_URL" -o "$tmp/als.zip"
-    unzip -q "$tmp/als.zip" -d "$APPDIR/opt/als"
+    curl -fsSL "$ALS_URL" -o "$tmp/als.tar.gz"
+    tar -xzf "$tmp/als.tar.gz" -C "$APPDIR/opt/als"
+    als_bin="$(find "$APPDIR/opt/als" -type f -name ada_language_server | head -1)"
+    [ -n "$als_bin" ] || { echo "ALS binary not found in tarball" >&2; exit 1; }
+    mkdir -p "$APPDIR/opt/als/bin"
+    # relative symlink so it resolves wherever the AppImage mounts
+    ln -sf "$(realpath --relative-to="$APPDIR/opt/als/bin" "$als_bin")" \
+           "$APPDIR/opt/als/bin/ada_language_server"
 
     echo "  -- OpenOCD + gdb (the SDK's own fetchers) -> opt/sdk/tools"
     ( cd "$APPDIR/opt/sdk" && bash tools/get-openocd.sh && bash tools/get-gdb.sh ) || \
