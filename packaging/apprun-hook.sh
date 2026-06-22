@@ -21,6 +21,12 @@ if [ ! -e "$__ae_sdk/tools/bin/esp32-ada" ]; then
 fi
 export ESP32S3_ADA_SDK="$__ae_sdk"
 
+# The editor's repo-root / {repo} resolution honors ADAEDIT_HOME: it points at
+# the bundled SDK (./x, tools/, crates/) so builds/flash/debug + "Set up device
+# access" resolve correctly even when the user opens a project from OUTSIDE the
+# seeded workspace (where walking up from the file would find no ./x launcher).
+export ADAEDIT_HOME="$__ae_sdk"
+
 # Tools on PATH: ALS (semantic features), OpenOCD + gdb (debug), the SDK's
 # esp32-ada/x launcher, plus the cross + native toolchain (via the SDK helper).
 export PATH="$APPDIR/opt/als/bin:$APPDIR/opt/debug/bin:$__ae_sdk/tools/bin:$PATH"

@@ -46,21 +46,44 @@ QString findProjectRoot(const QString &startPath)
     return fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath();
 }
 
+// Is this dir a bona-fide SDK/repo root (holds the ./x launcher or tools/)?
+static bool isRepoRoot(const QDir &d)
+{
+    return QFileInfo(d.filePath("x")).isFile()
+        || QFileInfo(d.filePath("tools/openocd.sh")).isFile();
+}
+
+// $ADAEDIT_HOME, set by the AppImage's AppRun, points at the bundled SDK tree
+// (./x, tools/, crates/).  It's the authoritative repo root when a project is
+// opened from OUTSIDE that tree (e.g. the user's own folder), where the walk-up
+// below would find no launcher.  Empty/unset/invalid -> ignored (source builds).
+static QString adaeditHome()
+{
+    const QString home = qEnvironmentVariable("ADAEDIT_HOME");
+    if (home.isEmpty()) return {};
+    QDir d(home);
+    return (d.exists() && isRepoRoot(d)) ? d.absolutePath() : QString();
+}
+
 // Walk up to the repo root: the ancestor holding the ./x launcher or tools/
 // (where OpenOCD etc. live), which may sit above the opened project folder.
+// A launcher found by walking up always wins (opening a file INSIDE any SDK
+// works as before); only when the walk finds none do we fall back to
+// $ADAEDIT_HOME (the bundled SDK), then to the nearest .git / the start dir.
 QString findRepoRoot(const QString &startPath)
 {
     QFileInfo fi(startPath);
     QDir d(fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath());
     QString fallback;
     forever {
-        if (QFileInfo(d.filePath("x")).isFile()
-            || QFileInfo(d.filePath("tools/openocd.sh")).isFile())
+        if (isRepoRoot(d))
             return d.absolutePath();
         if (fallback.isEmpty() && d.exists(".git"))
             fallback = d.absolutePath();
         if (!d.cdUp()) break;
     }
+    if (const QString home = adaeditHome(); !home.isEmpty())
+        return home;
     return !fallback.isEmpty() ? fallback
                               : (fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath());
 }
