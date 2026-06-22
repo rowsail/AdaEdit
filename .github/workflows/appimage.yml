@@ -14,6 +14,9 @@ on:
 
 # Built in an Ubuntu 22.04 container (glibc 2.35, Qt 5.15) -- the oldest base
 # that compiles the editor (it uses QFont::families(), Qt 5.13+).
+permissions:
+  contents: write          # create/attach the GitHub release on a v* tag
+
 jobs:
   editor:
     name: Editor AppImage
@@ -34,6 +37,11 @@ jobs:
           name: AdaEdit-x86_64.AppImage
           path: packaging/AdaEdit-x86_64.AppImage
           if-no-files-found: error
+      - name: Attach editor AppImage to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packaging/AdaEdit-x86_64.AppImage
 
   full:
     name: Full bundle AppImage
@@ -66,4 +74,17 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: AdaEdit ${{ github.ref_name }}
+          prerelease: true
+          body: |
+            Self-contained AdaEdit IDE for bare-metal ESP32-S3 Ada.
+
+            - **AdaEdit-x86_64.AppImage** — editor only (~28 MB): Qt5 + QScintilla.
+            - **AdaEdit-full-x86_64.AppImage** — complete IDE (~650 MB): editor +
+              GNAT xtensa/native toolchain + gprbuild + ALS + OpenOCD/gdb + the
+              ESP32-S3 SDK with runtime source packs. Builds firmware offline.
+
+            Requires glibc ≥ 2.35 (built on Ubuntu 22.04). x86_64 only.
+            Flashing/debug real hardware needs a one-time device step:
+            in the editor, **Build ▸ Set up device access…** (or `./x setup-device`).
           files: packaging/AdaEdit-full-x86_64.AppImage
