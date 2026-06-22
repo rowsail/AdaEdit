@@ -20,7 +20,8 @@ public:
     explicit LspClient(QObject *parent = nullptr);
     ~LspClient() override;
 
-    void start(const QString &serverPath, const QString &rootPath, const QString &projectFile);
+    void start(const QString &serverPath, const QString &rootPath, const QString &projectFile,
+               const QStringList &gprProjectPath = {});
     bool isRunning() const;
 
     void didOpen(const QString &path, const QString &text);

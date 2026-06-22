@@ -1,6 +1,7 @@
 #include "lspclient.h"
 
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QUrl>
@@ -41,11 +42,23 @@ QString LspClient::uriToPath(const QString &uri)
     return QUrl(uri).toLocalFile();
 }
 
-void LspClient::start(const QString &serverPath, const QString &rootPath, const QString &projectFile)
+void LspClient::start(const QString &serverPath, const QString &rootPath, const QString &projectFile,
+                      const QStringList &gprProjectPath)
 {
     m_proc = new QProcess(this);
     connect(m_proc, &QProcess::readyReadStandardOutput, this, &LspClient::onStdout);
     connect(m_proc, &QProcess::readyReadStandardError, this, &LspClient::onStderr);
+    // Give ALS GPR_PROJECT_PATH so a standalone project's by-name `with`s
+    // (with "esp32s3_rts.gpr"; with "esp32s3_hal.gpr";) resolve -- without it ALS
+    // can't load the project, so cross-reference (go-to-definition) fails.
+    if (!gprProjectPath.isEmpty()) {
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        QString combined = gprProjectPath.join(':');
+        const QString existing = env.value("GPR_PROJECT_PATH");
+        if (!existing.isEmpty()) combined += ':' + existing;
+        env.insert("GPR_PROJECT_PATH", combined);
+        m_proc->setProcessEnvironment(env);
+    }
     m_proc->start(serverPath, QStringList{});
     if (!m_proc->waitForStarted(5000)) {
         emit log(tr("Failed to start ada_language_server"));

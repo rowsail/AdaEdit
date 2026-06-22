@@ -153,6 +153,7 @@ private:
     void refreshBreakpointsPane();
     void applyBreakpointMarkers(QsciScintilla *e);
     void ensureLsp(const QString &file);
+    QStringList gprProjectPathFor(const QString &file) const;   // SDK dirs for ALS GPR_PROJECT_PATH
     void requestDefinition(QsciScintilla *e, int line, int index);
     void requestHover(QsciScintilla *e, int line, int index, const QPoint &anchorGlobal);
     void requestFormat(QsciScintilla *e);

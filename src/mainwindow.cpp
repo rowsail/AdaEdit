@@ -1383,6 +1383,34 @@ void MainWindow::gotoLine()
 
 // ---- Language server (definition / hover) --------------------------------
 
+// Directories to put on ALS's GPR_PROJECT_PATH so a standalone project's by-name
+// `with`s resolve: the SDK's crates/esp32s3_rts and every libs/<name>/.  Find the
+// SDK via the env the AppRun sets, the bundle, or the resolved repo root.
+QStringList MainWindow::gprProjectPathFor(const QString &file) const
+{
+    QStringList roots;
+    roots << qEnvironmentVariable("ESP32S3_ADA_SDK")
+          << qEnvironmentVariable("ADAEDIT_HOME");
+    if (const QString a = qEnvironmentVariable("APPDIR"); !a.isEmpty())
+        roots << QDir(a).filePath("opt/sdk");
+    roots << findRepoRoot(file);
+
+    QString sdk;
+    for (const QString &r : roots)
+        if (!r.isEmpty()
+            && QFileInfo::exists(QDir(r).filePath("crates/esp32s3_rts/esp32s3_rts.gpr"))) {
+            sdk = r; break;
+        }
+    QStringList path;
+    if (!sdk.isEmpty()) {
+        path << QDir(sdk).filePath("crates/esp32s3_rts");
+        QDir libs(QDir(sdk).filePath("libs"));
+        for (const QString &d : libs.entryList(QDir::Dirs | QDir::NoDotAndDotDot))
+            path << libs.filePath(d);
+    }
+    return path;
+}
+
 void MainWindow::ensureLsp(const QString &file)
 {
     const QString gpr = findGpr(file);
@@ -1416,7 +1444,7 @@ void MainWindow::ensureLsp(const QString &file)
     connect(m_lsp, &LspClient::applyEditRequested, this, &MainWindow::applyWorkspaceEdit);
     connect(m_lsp, &LspClient::ready, this,
             [this] { requestSemanticTokens(currentEditor()); });   // colour once ALS is up
-    m_lsp->start(als, root, gpr);
+    m_lsp->start(als, root, gpr, gprProjectPathFor(file));
 }
 
 void MainWindow::requestDefinition(QsciScintilla *e, int line, int index)
