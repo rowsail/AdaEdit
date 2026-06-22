@@ -181,6 +181,7 @@ private:
     void startDebugSession(bool attach);
 
     CmdContext ctxForCurrent() const;
+    QString sdkTool(const QString &rel) const;   // resolve an SDK file (bundle/env/repo)
     void runAction(const QString &cmdTemplate, const QString &what);
     void showDebugLine(const QString &fullPath, int line);
     void clearDebugLine();

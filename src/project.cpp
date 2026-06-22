@@ -53,6 +53,36 @@ Project Project::makeDefault()
     return p;
 }
 
+Project Project::makeStandalone(const QString &rootPath)
+{
+    Project p;
+    p.name = QFileInfo(rootPath).fileName();
+    if (p.name.isEmpty()) p.name = "Untitled";
+    p.rootPath = rootPath;
+
+    TargetProfile esp;
+    esp.name        = "ESP32-S3";
+    esp.description = "Standalone bare-metal ESP32-S3 project";
+    // The esp32-ada launcher builds/flashes/debugs a project from its OWN folder
+    // ({root}); -C makes it run there regardless of cwd.  {repo} resolves to the
+    // bundled SDK (via ADAEDIT_HOME) so its tools/bin/esp32-ada is found.
+    const QString ada = "bash {repo}/tools/bin/esp32-ada -C {root}";
+    esp.buildCommand   = ada + " build --profile {profile}";
+    esp.flashCommand   = ada + " build --profile {profile} && " + ada + " flash";
+    esp.runCommand     = ada + " run --profile {profile}";
+    esp.monitorCommand = ada + " monitor";
+    esp.debugServerCommand = "bash {repo}/tools/openocd.sh";
+    esp.gdbCommand     = "{repo}/tools/gdb/xtensa-esp-elf-gdb/bin/xtensa-esp32s3-elf-gdb";
+    esp.gdbProgram     = "{root}/app.elf";
+    esp.gdbRemote      = "localhost:3333";
+    esp.initBreakpoint = "app_main";
+
+    p.targets = { esp };
+    p.activeIndex = 0;
+    p.dirty = false;
+    return p;
+}
+
 const TargetProfile *Project::active() const
 {
     if (activeIndex < 0 || activeIndex >= targets.size())

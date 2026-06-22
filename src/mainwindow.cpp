@@ -1519,12 +1519,73 @@ void MainWindow::onProblemActivated(QListWidgetItem *item)
 
 // ---- Project / targets ---------------------------------------------------
 
+// Locate the SDK that owns tools/bin/<rel>: the AppImage's read-only bundle
+// first (always present), then the AppRun env, then the resolved repo/root.
+QString MainWindow::sdkTool(const QString &rel) const
+{
+    const CmdContext ctx = ctxForCurrent();
+    QStringList roots;
+    if (const QString a = qEnvironmentVariable("APPDIR"); !a.isEmpty())
+        roots << QDir(a).filePath("opt/sdk");
+    roots << qEnvironmentVariable("ADAEDIT_HOME")
+          << qEnvironmentVariable("ESP32S3_ADA_SDK")
+          << ctx.repo << ctx.root;
+    for (const QString &r : roots) {
+        if (r.isEmpty()) continue;
+        const QString cand = QDir(r).filePath(rel);
+        if (QFileInfo::exists(cand)) return cand;
+    }
+    return {};
+}
+
 void MainWindow::newProject()
 {
-    m_project = Project::makeDefault();
+    // Pick (or create, via the dialog's "New Folder" button) the project folder.
+    const QString start = m_project.rootPath.isEmpty() ? QDir::homePath() : m_project.rootPath;
+    const QString dir = QFileDialog::getExistingDirectory(
+        this, tr("New project — choose or create a folder"), start,
+        QFileDialog::ShowDirsOnly);
+    if (dir.isEmpty()) return;                       // cancelled
+
+    const QString gpr = QDir(dir).filePath("app.gpr");
+    if (QFileInfo::exists(gpr)) {
+        if (QMessageBox::question(this, tr("New project"),
+                tr("%1 already contains an app.gpr.\n\nOpen it as a project instead?").arg(dir))
+            != QMessageBox::Yes)
+            return;
+    } else {
+        // Scaffold with the SDK's standalone initializer (just writes files).
+        const QString launcher = sdkTool("tools/bin/esp32-ada");
+        if (launcher.isEmpty()) {
+            QMessageBox::warning(this, tr("New project"),
+                tr("Couldn't find the SDK launcher (tools/bin/esp32-ada).\n\nUse the full "
+                   "AppImage, or open the ESP32-S3 SDK folder first."));
+            return;
+        }
+        QProcess proc;
+        proc.setProcessChannelMode(QProcess::MergedChannels);
+        proc.start("bash", {launcher, "-C", dir, "init"});
+        proc.waitForFinished(30000);
+        const QString out = QString::fromLocal8Bit(proc.readAll());
+        m_output->clear();
+        m_output->appendPlainText(QStringLiteral("[New project] esp32-ada init %1\n%2").arg(dir, out));
+        if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
+            QMessageBox::warning(this, tr("New project"),
+                tr("Scaffolding failed:\n\n%1").arg(out.isEmpty() ? tr("(no output)") : out));
+            return;
+        }
+    }
+
+    // Adopt a standalone project (esp32-ada-driven commands), persist it, open it.
+    m_project = Project::makeStandalone(dir);
+    QString err;
+    m_project.save(QDir(dir).filePath(".adaproj"), &err);
+    openFolderPath(dir);                              // sets tree root + reloads .adaproj
+    const QString main = QDir(dir).filePath("src/main.adb");
+    if (QFileInfo::exists(main)) openOrActivate(main);
     updateTitle();
     updateDebugActions();
-    statusBar()->showMessage(tr("New project"), 3000);
+    statusBar()->showMessage(tr("New project at %1").arg(dir), 4000);
 }
 
 void MainWindow::openProject()
@@ -1711,25 +1772,11 @@ void MainWindow::onActionFinished(int exitCode)
 
 void MainWindow::setupDevice()
 {
-    // The installer lives in an SDK tree at tools/install-udev.sh.  Look in the
-    // most-reliable places first: the AppImage's read-only bundle ($APPDIR/opt/sdk,
-    // always present and current), then the env the AppRun exports, then the repo
-    // resolved from the open project.  The installer only reads its sibling rule
-    // file and writes to /etc, so running it from the read-only bundle is fine.
-    const CmdContext ctx = ctxForCurrent();
-    QStringList roots;
-    if (const QString a = qEnvironmentVariable("APPDIR"); !a.isEmpty())
-        roots << QDir(a).filePath("opt/sdk");
-    roots << qEnvironmentVariable("ADAEDIT_HOME")
-          << qEnvironmentVariable("ESP32S3_ADA_SDK")
-          << ctx.repo << ctx.root;
-
-    QString installer;
-    for (const QString &r : roots) {
-        if (r.isEmpty()) continue;
-        const QString cand = QDir(r).filePath("tools/install-udev.sh");
-        if (QFileInfo::exists(cand)) { installer = cand; break; }
-    }
+    // The installer lives in an SDK tree at tools/install-udev.sh.  sdkTool() looks
+    // in the AppImage's read-only bundle first (always present), then the AppRun
+    // env, then the resolved repo.  It only reads its sibling rule file and writes
+    // to /etc, so running it from the read-only bundle is fine.
+    const QString installer = sdkTool("tools/install-udev.sh");
     if (installer.isEmpty()) {
         QMessageBox::warning(this, tr("Set up device access"),
             tr("Couldn't find the device-setup script (tools/install-udev.sh).\n\n"

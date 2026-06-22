@@ -56,6 +56,9 @@ public:
     bool dirty = false;
 
     static Project makeDefault();     // seeds ./x-based ESP32-S3 targets
+    // A standalone project in its own folder (scaffolded by `esp32-ada init`):
+    // commands drive the esp32-ada launcher in {root}, not ./x {example}.
+    static Project makeStandalone(const QString &rootPath);
 
     const TargetProfile *active() const;
     void setActive(int index);
