@@ -1214,7 +1214,11 @@ void MainWindow::replace()
                                             QLineEdit::Normal, QString(), &ok);
     if (!ok) return;
     int n = 0;
-    if (e->findFirst(s, false, false, false, true)) {
+    // Replace across the WHOLE document: start at the top and do NOT wrap, so we
+    // catch matches before the cursor and a replacement that contains the search
+    // term (e.g. a -> ba) can't loop back onto itself forever.
+    e->setCursorPosition(0, 0);
+    if (e->findFirst(s, false, false, false, /*wrap=*/false, /*forward=*/true)) {
         do { e->replace(r); ++n; } while (e->findNext());
     }
     statusBar()->showMessage(tr("%n replacement(s)", "", n), 3000);
