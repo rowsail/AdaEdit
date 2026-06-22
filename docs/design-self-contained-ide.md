@@ -161,8 +161,16 @@ fails.
   untouched.  The ~1.5 GB fetch+package itself runs in CI (Phase 4).
 - **Phase 3 — Device access.** Ship the udev rule + `sudo` installer and an
   in-editor "device not accessible — run setup" path.
-- **Phase 4 — CI artifact.** Extend GitHub Actions to build and upload the
-  AppImage(s) per arch, alongside the existing Debian binary job.
+- **Phase 4 — CI artifact. (DONE)** `.github/workflows/appimage.yml` builds the
+  editor AppImage (~28 MB) on every push/PR and uploads it; a gated `full` job
+  (version tag, or a manual run that ticks "full") installs Alire, runs
+  `BUNDLE=full packaging/build-appimage.sh`, uploads the **~650 MB** bundle and
+  attaches it to the GitHub release on a `v*` tag. Built in an `ubuntu:22.04`
+  container (oldest base with Qt 5.13+, needed for `QFont::families()`).
+  **Verified end-to-end:** the real CI artifact was downloaded, the local Alire
+  toolchain hidden and `alr`/`git` shadowed to fail, and its AppRun hook seeded a
+  workspace and built `gpio0_blink` → `app.bin` (89 KB) using only the bundled
+  `xtensa-esp32-elf-gcc` — fully offline, no Alire.
 
 ## 8. Editor-side changes implied
 
