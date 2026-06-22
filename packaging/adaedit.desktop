@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AdaEdit
+GenericName=Ada IDE
+Comment=Ada editor for bare-metal ESP32-S3
+Exec=adaedit %F
+Icon=adaedit
+Categories=Development;IDE;TextEditor;
+Terminal=false
+MimeType=text/x-adasrc;

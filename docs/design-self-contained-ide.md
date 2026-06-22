@@ -142,9 +142,12 @@ fails.
 - **Phase 0 — Alire-free build.** Make `./x build|flash|run` work against a
   bundled (or fixed-path) `gprbuild` + prebuilt runtimes with no `alr`/network.
   Pure shell/gpr work; de-risks the whole effort. *(prerequisite)*
-- **Phase 1 — Editor AppImage.** Package just AdaEdit + Qt5 + QScintilla via
-  `linuxdeploy` + the Qt plugin, built on an old glibc base. Proves the GUI
-  bundling and `AppRun`.
+- **Phase 1 — Editor AppImage. (DONE)** `packaging/build-appimage.sh` packages
+  AdaEdit + Qt5 + QScintilla via `linuxdeploy` + the Qt plugin into a ~36 MB
+  self-contained AppImage (Qt5, `libqscintilla2_qt5`, the xcb platform plugin and
+  `AppRun` all bundled; verified it launches and renders from its own libs).
+  Still TODO for distribution: build on an old glibc base (e.g. Ubuntu 20.04) for
+  broad-distro compatibility.
 - **Phase 2 — Full toolchain bundle.** Add the cross-toolchain, ALS,
   OpenOCD/gdb, the bare-metal tree with prebuilt runtimes; implement `AppRun`
   env + first-run workspace seeding; wire the editor's `{repo}` / debug paths to
