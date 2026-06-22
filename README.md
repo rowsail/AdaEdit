@@ -1,67 +1,154 @@
 # AdaEdit
 
-A native Qt5 editor for writing Ada and building/debugging the bare-metal
-ESP32-S3 Ada runtime. A clean-room successor to SETEdit (Turbo Vision,
-text-mode) rebuilt on Qt + QScintilla, reusing SETEdit's Ada highlighting rules
-and a Borland-flavoured keybinding UX.
+A native Qt5 editor — and, in its bundled form, a **completely self-contained
+IDE** — for writing Ada and building / flashing / debugging the bare-metal
+ESP32-S3 Ada runtime. A clean-room successor to SETEdit (Turbo Vision, text-mode)
+rebuilt on Qt + QScintilla, reusing SETEdit's Ada highlighting rules and a
+Borland-flavoured keybinding UX.
 
-## Status: scaffold (v0.1)
+## Download — self-contained AppImage
 
-### Editing
+Prebuilt Linux AppImages are published on the **[Releases page](https://github.com/rowsail/AdaEdit/releases/latest)**.
+No install, no dependencies — download, `chmod +x`, run:
+
+| Download | Size | What's inside |
+|---|---|---|
+| **`AdaEdit-full-x86_64.AppImage`** | ~680 MB | The whole IDE: editor + GNAT `xtensa-esp32-elf` cross-compiler + `gprbuild` + `ada_language_server` + OpenOCD/gdb + the ESP32-S3 SDK (runtime + `./x`). **Builds, flashes and debugs firmware with nothing else installed** — the 1980s Borland-box experience. |
+| **`AdaEdit-x86_64.AppImage`** | ~30 MB | Editor only (Qt5 + QScintilla). Language and build features use whatever `ada_language_server` / toolchain are already on the host. |
+
+```sh
+chmod +x AdaEdit-full-x86_64.AppImage
+./AdaEdit-full-x86_64.AppImage
+# if FUSE isn't available (e.g. some WSL2 setups):
+APPIMAGE_EXTRACT_AND_RUN=1 ./AdaEdit-full-x86_64.AppImage
+```
+
+- **Requirements:** x86_64, glibc ≥ 2.35 (built on Ubuntu 22.04). Runs natively on
+  Linux and under **WSL2** on Windows (Win11/WSLg for the GUI).
+- **First run** seeds a writable SDK workspace at `~/.local/share/adaedit/sdk`;
+  later AppImage updates re-sync bundled SDK fixes into it automatically.
+- **Flashing / on-chip debug** needs one-time USB device access — the editor
+  offers **Build ▸ Set up device access…** (installs a udev rule; see §Device
+  access). On WSL2 you also bridge the board in with `usbipd-win`.
+
+To build the editor (or the AppImages) from source instead, see [§Build](#build).
+
+## Highlights
+
+- **Self-contained**: the full AppImage carries the entire toolchain, runtime,
+  language server and debugger. Build/flash/debug works offline, out of the box.
+- **The folder is the project** — open any folder; AdaEdit derives its build
+  commands from the folder (an in-tree SDK example, or a standalone project).
+- **Native serial monitor** and a **multi-board device selector** (no external
+  terminal, no python).
+- **Refactoring** via the Ada Language Server: project-wide **Rename** plus ALS
+  code actions (Extract subprogram, Name parameters, …).
+
+## Editing
+
 - Tabbed Ada editor (QScintilla) with the `AdaLexer` (Ada 95 keywords from
   SETEdit + Ada 2005/2022 additions), line numbers, folding, auto-indent.
   Right-click a tab to **Close**, **Close all others**, or close everything **to
   the left / to the right**.
-- File: New / Open / Save / Save As / **Save All** (with unsaved-changes guard);
-  open files or a folder from the command line.
-- Edit: Undo / Redo / Cut / Copy / Paste, and **Format (Ada)** — reformats the
-  whole file, or just the selected lines, via the language server.
+- File: New / Open / Save / Save As / **Save All** (with unsaved-changes guard).
+- Edit: Undo / Redo / Cut / Copy / Paste, **Format (Ada)** (whole file or the
+  selection, via the language server), **Rename symbol** (F2) and **Code
+  actions** (Ctrl+.) — see §Refactoring.
 - Search: Find / Replace / Find next / Go to line / Go to definition / Complete.
+  (Replace acts on the whole document.)
 - **Session restore**: closing the editor remembers the window size/position, the
-  dock layout (which docks are shown/hidden + their sizes), the open files and the
-  active tab — reopening with no arguments restores the previous session.
+  dock layout, the open files and the active tab — reopening restores them.
+- **Settings** (File → Settings): **Dark mode**; separate **interface** font and
+  **editor & dock** font (monospaced by default); and a **Keyboard Shortcuts**
+  editor — every command is rebindable, with conflict detection and reset.
 
-### Workspace
-- **Open a folder as a project**: File → Open folder (or `adaedit <dir>`) roots
-  the explorer tree at the folder; double-click any file to open it. A `.adaproj`
-  in the folder loads automatically.
-- **View menu**: a checkable entry per dock (Project, Output, Debug console,
-  Breakpoints, Variables, Threads, Call stack, Problems) — toggles visibility,
-  default shortcuts **Ctrl+Shift+1..8**.
-- **Settings** (File → Settings): **Dark mode**; separate **interface** font
-  (menus/titles) and **editor & dock** font (monospaced by default); and a
-  **Keyboard Shortcuts** editor — every command is rebindable, with conflict
-  detection, per-row + global reset, persisted to `QSettings`.
+## Projects — the folder is the project
 
-### ESP32-S3 build + runtime profile
-- The editor targets the ESP32-S3 only and drives the repo's **`./x`** launcher
-  for **Build / Flash / Run / Monitor** (toolbar buttons and the Build menu).
-  Commands run at the project root and expand `{repo}`, `{root}`, `{example}`,
-  `{profile}`, `{file}`, `{dir}`, `{base}`, `{exe}`. Build / Flash / Run **Save
-  All** first, so they never compile stale source.
+There is no separate project file. A **project is just a folder**, and AdaEdit
+derives its Build/Flash/Run/Debug commands from the folder's structure:
+
+- a folder under the SDK's `examples/` → driven via the SDK's **`./x {example}`**;
+- a standalone folder (its own `app.gpr` + `build.sh`) → driven via
+  **`esp32-ada -C {root}`** (a project can live anywhere on disk).
+
+From the **File** menu:
+
+- **New project…** — pick (or create) a folder; AdaEdit scaffolds a buildable
+  standalone project into it (`esp32-ada init`: `src/main.adb`, `app.gpr` already
+  `with`-ing the runtime + HAL, `board.ads`, `build.sh`, …).
+- **Open project…** — open any folder (this also replaces the old "Open folder").
+- **Save project as… (duplicate)** — copy the current project into a different /
+  new folder (sources only — build outputs are skipped), then switch to the copy.
+
+The explorer tree roots at the project folder; double-click any file to open it.
+
+## ESP32-S3 build + runtime profile
+
+- The editor targets the ESP32-S3 only. **Build / Flash / Run / Monitor** are on
+  the toolbar and the Build menu; they run at the project root and **Save All**
+  first, so they never compile stale source.
 - **Runtime profile selector** (toolbar): *Auto (example default)* /
-  *Jorvik (light-tasking)* / *Embedded* / *Full*. The choice is passed to
-  `./x … --profile <p>`, which maps it to `ESP32S3_RTS_PROFILE` (the external the
-  runtime crate reads); *Auto* uses each example's own profile. Persisted in
-  `QSettings`.
-- **Show runtime path** (Build menu) echoes the runtime directory the build will
-  use (`…/crates/esp32s3_rts/<profile>-esp32s3`) to the Output pane, flagging when
-  that runtime isn't built yet — confirm a profile change without a full build.
+  *Jorvik (light-tasking)* / *Embedded* / *Full*. The choice maps to
+  `ESP32S3_RTS_PROFILE` and selects the runtime
+  (`crates/esp32s3_rts/<profile>-esp32s3`). Persisted in `QSettings`.
+- **Show runtime path** (Build menu) echoes the runtime directory a build will
+  link, flagging when that runtime isn't built yet.
 
-### Debugging (GDB/MI)
-- **Start debugging** launches the debug server (OpenOCD on :3333), runs gdb in MI
-  mode, connects, and stops at `app_main`. Continue / Step over / Step into /
-  Restart / Stop / Pause drive the session; the current line is marked and a Debug
-  console shows gdb output and takes raw gdb commands.
-- **Breakpoints**: click the left margin or Toggle breakpoint to set one; gdb snaps
-  it to the nearest code line. A Breakpoints pane lists them (check to
-  enable/disable, double-click to jump); they persist across sessions and re-arm on
-  each Start.
-- **Dual-core (SMP)**: launches OpenOCD with `ESP_RTOS=hwthread` so both LX7 cores
-  appear as gdb threads. **Attach (post-mortem)** connects and `monitor halt`s in
-  place (no reset) to inspect a hang.
-- **Threads / Call stack / Variables & watch** panes track the stopped target;
-  locals auto-refresh at every stop and watch expressions evaluate per stop.
+## Serial monitor
+
+A native **Serial monitor** dock backed by Qt's `QSerialPort` — no external
+miniterm/picocom/screen, no python:
+
+- pick the **port** and **baud**, **Connect**, watch live output, and send a line
+  (selectable CR/LF). The dock has a View toggle and remembers the last port/baud.
+- **Run** = build + flash, then auto-opens the monitor; **Flash/Run** release the
+  port first so the flasher can use it.
+
+## Device selection (multiple boards)
+
+A **Device** dropdown on the toolbar enumerates connected USB serial devices —
+labelled with description + serial number, so two identical boards are
+distinguishable — plus a **Rescan** button. The selection is exported as
+`$ESPPORT`, which steers **flash, debug and the monitor to the same board** at
+once (OpenOCD maps the tty to that board's USB-JTAG adapter serial and pins it).
+*Auto* leaves the SDK default (`/dev/ttyACM0`).
+
+## Device access (flash / debug permissions)
+
+Flashing (`/dev/ttyACM*`) and USB-JTAG debug need device permissions the AppImage
+can't grant itself. **Build ▸ Set up device access…** runs the SDK's one-time
+installer (via `pkexec`): it drops a udev rule (`60-esp32-ada.rules`, covering the
+Espressif `303a` USB-JTAG and common CP210x/CH340/FTDI bridges) and adds you to
+the device groups. The editor also offers this automatically if a flash/run fails
+on permissions. Equivalent CLI: `./x setup-device`.
+
+## Refactoring (Ada Language Server)
+
+- **Rename symbol** (right-click ▸ Refactor, Edit menu, or **F2**): a project-wide
+  rename via `textDocument/rename` — every file that references the symbol is
+  updated (left modified for review → Save All).
+- **Code actions** (right-click ▸ Refactor ▸ Code actions, Edit menu, or
+  **Ctrl+.**): every refactoring/quick-fix ALS offers at the cursor — e.g.
+  *Name parameters in the call*, *Extract Procedure* — applied via the server.
+
+## Debugging (GDB/MI)
+
+- **Start debugging** launches OpenOCD (:3333), runs gdb in MI mode, connects and
+  stops at `app_main`. Continue / Step over / Step into / Restart / Stop / Pause
+  drive the session; the current line is marked and a Debug console shows gdb
+  output and takes raw gdb commands.
+- **Breakpoints**: click the left margin (or Toggle breakpoint); a Breakpoints
+  pane lists them (enable/disable, double-click to jump). They re-arm on each
+  Start, are **cleared when you switch projects**, and fall back to matching by
+  file name if the full path doesn't resolve.
+- **Dual-core (SMP)** presents both LX7 cores as gdb threads; **Attach
+  (post-mortem)** connects and `monitor halt`s in place (no reset) to inspect a
+  hang. **Threads / Call stack / Variables & watch** panes track the stopped
+  target.
+- On-chip flash software-breakpoints are off by default (OpenOCD's flash
+  auto-probe is unreliable for some bare-metal images and can reject the GDB
+  connect); debug uses the two hardware breakpoints instead, which works in every
+  profile. Set `ESP_FLASH_SIZE=<MB>` to re-enable flash breakpoints.
 
 ## Keyboard shortcuts
 
@@ -70,31 +157,24 @@ build/debug. **All are rebindable** in Settings → Keyboard shortcuts.
 
 | | |
 |---|---|
-| File | Ctrl+N New · Ctrl+O Open · Ctrl+K Ctrl+O Open folder · Ctrl+S Save · Ctrl+Shift+S Save As · Ctrl+Alt+S Save All · Ctrl+Q Exit |
-| Edit | Ctrl+Z Undo · Ctrl+Y Redo · Ctrl+X/C/V Cut/Copy/Paste · Ctrl+Shift+F Format |
+| File | Ctrl+N New · Ctrl+O Open file · Ctrl+K Ctrl+O Open project · Ctrl+S Save · Ctrl+Shift+S Save As · Ctrl+Alt+S Save All · Ctrl+Q Exit |
+| Edit | Ctrl+Z Undo · Ctrl+Y Redo · Ctrl+X/C/V Cut/Copy/Paste · Ctrl+Shift+F Format · **F2 Rename** · **Ctrl+. Code actions** |
 | Search | Ctrl+F Find · Ctrl+H Replace · F3 Find next · Ctrl+G Goto line · F12 Go to definition · Ctrl+Space Complete |
-| View | Ctrl+Shift+1..8 toggle docks |
+| View | Ctrl+Shift+1..9 toggle docks |
 | Build | F9 Build · Alt+F9 Flash · Shift+F9 Run · Alt+F5 Monitor |
 | Debug | F5 Start · Ctrl+F9 Continue · F8 Step over · F7 Step into · Ctrl+F6 Pause · Ctrl+Shift+F2 Restart · Ctrl+F2 Stop · Ctrl+F8 Toggle breakpoint · Ctrl+F7 Add watch |
 
 ## Semantic features (Ada Language Server)
 
-Opening an Ada file starts `ada_language_server` (auto-located from PATH or the
-AdaCore VS Code/Zed extension) pointed at the nearest `.gpr`. Right-click a symbol
-(or **F12**) for **Go to definition**; right-click → **Quick info (hover)** for
-type/doc info. **Format (Ada)** uses `textDocument/formatting` (whole file) or
-`rangeFormatting` (selection). Communication is LSP/JSON-RPC over stdio; the
-buffer is synced (didOpen/didChange) before each request.
-
-**Diagnostics**: ALS errors/warnings appear as squiggles (red = error, orange =
-warning) and in a **Problems pane** — click an entry to jump to it.
-
-**Completion** (Ctrl+Space): identifier completion from ALS. The client declares
-`completionItem.resolveSupport` so ALS defers documentation computation (eager doc
-computation crashes ALS on this runtime's `abstract state` declarations).
+Opening an Ada file starts `ada_language_server` (bundled in the full AppImage, or
+auto-located from PATH / the AdaCore VS Code/Zed extension) pointed at the nearest
+`.gpr`. **Go to definition** (F12), **Quick info (hover)**, **Format**, **Rename**
+and **Code actions** all flow over LSP/JSON-RPC; the buffer is synced before each
+request. **Diagnostics** appear as squiggles and in a **Problems pane**.
+**Completion** (Ctrl+Space) draws from ALS.
 
 Note: ALS indexes the project for a few seconds after a file opens — a request
-made before indexing finishes returns "No definition found"; just retry.
+made before indexing finishes may return "not found"; just retry.
 
 ## Build
 
@@ -104,6 +184,11 @@ cmake --build build -j
 ./build/adaedit some_file.adb
 ```
 
+The repo packages the AppImages with `packaging/build-appimage.sh`
+(`BUNDLE=editor` or `BUNDLE=full`); external components are fetched at build time
+and pinned in `packaging/manifest.env` (nothing heavy is committed). GitHub
+Actions builds both on every push and publishes them on a `v*` tag.
+
 ### Build dependencies
 Only Qt5 + QScintilla — no other third-party libraries.
 
@@ -111,7 +196,7 @@ Only Qt5 + QScintilla — no other third-party libraries.
 |---|---|
 | C++17 compiler (GCC/Clang/MSVC) | — |
 | CMake ≥ 3.16 | 3.31 |
-| Qt5 — Widgets + PrintSupport | 5.15 |
+| Qt5 — Widgets + PrintSupport + SerialPort | 5.15 |
 | QScintilla for Qt5 (dev) | 2.14 |
 
 ```sh
@@ -126,55 +211,29 @@ brew install cmake qt@5 qscintilla2
 ```
 
 CMake locates QScintilla via Qt's own `qmake` paths plus the common prefixes; if
-it lives somewhere unusual, pass `-DQSCINTILLA_ROOT=<prefix>` (expects
-`<prefix>/include/Qsci` and `<prefix>/lib`).
+it lives somewhere unusual, pass `-DQSCINTILLA_ROOT=<prefix>`.
 
 The app compiles cross-platform, but Build/Flash/Run/Monitor/Debug shell out via
-`/bin/sh` and `bash` (the `./x` launcher), so full functionality assumes a POSIX
-environment (Linux/macOS, or WSL/MSYS on Windows).
+`/bin/sh` and `bash`, so full functionality assumes a POSIX environment
+(Linux/macOS, or WSL2 on Windows).
 
-### Runtime dependencies (to actually build/flash/debug ESP32-S3 Ada)
-Not needed to compile the editor — needed for its actions to work:
-- `ada_language_server` on `PATH` (or the AdaCore VS Code/Zed extension) — for
-  completion, hover, diagnostics, format.
-- **Alire (`alr`)** + the **GNAT `xtensa-esp32-elf`** toolchain — for build/flash/run.
-- The **`ada-bare-metal-esp32s3`** repo — provides `./x`, the runtime crate and the
-  per-example build scripts the editor invokes.
-- **OpenOCD** + the pinned xtensa esp **gdb** — for on-chip debugging (the repo's
-  `tools/get-openocd.sh` / `get-gdb.sh` fetch them).
-- Serial/USB access (esptool, `/dev/ttyACM*` permissions) — for flash + monitor.
+### Runtime dependencies (source builds only)
+The full AppImage bundles all of these; a from-source editor needs them on the
+host for its actions to work:
+- `ada_language_server` on `PATH` — completion, hover, diagnostics, format, refactor.
+- The **GNAT `xtensa-esp32-elf`** toolchain + `gprbuild` (e.g. via **Alire**).
+- The **`ada_esp32s3`** SDK — `./x` / `esp32-ada`, the runtime crate, build scripts.
+- **OpenOCD** + the pinned xtensa esp **gdb** — for on-chip debugging.
 
 ## Layout
 
-    CMakeLists.txt        build (Qt5 + QScintilla; portable QScintilla finder)
+    CMakeLists.txt        build (Qt5 + QScintilla + SerialPort; portable QScintilla finder)
     src/main.cpp          entry point, CLI file args, session restore
-    src/mainwindow.*      editor shell: tabs, menus, docks, settings, profile, actions
+    src/mainwindow.*      editor shell: tabs, menus, docks, settings, profile, device, actions
     src/adalexer.*        Ada highlighting via native Scintilla SCLEX_ADA
-    src/project.*         single ESP32-S3 command profile + token expansion
+    src/project.*         derived ESP32-S3 command profiles + token expansion
     src/debugger.*        GDB/MI debug engine (server + gdb, step/continue/marker)
-    src/lspclient.*       Ada Language Server client (definition, hover, completion, format)
-    docs/ada_keywords.txt        extracted Ada keyword set + lexing rules
-    docs/setedit_keybindings.txt extracted SETEdit menu + keybinding inventory
-    docs/design-self-contained-ide.md  AppImage self-contained IDE design notes
-
-## ESP32-S3 workflow
-
-Open an example folder under the `ada-bare-metal-esp32s3` repo (e.g.
-`examples/esp32s3_gpio0_blink`), pick a **Profile** in the toolbar (or leave
-*Auto*), then **Build / Flash / Run / Monitor** — each runs `./x` at the project
-root with output in the Output dock. **Show runtime path** confirms which runtime
-a build will link. **Start debugging** boots OpenOCD + gdb, halts at `app_main`,
-and the step controls take over.
-
-The default action commands are:
-
-    build:   bash {repo}/x build {example} --profile {profile}
-    flash:   bash {repo}/x build {example} --profile {profile} && bash {repo}/x flash {example}
-    run:     bash {repo}/x run {example} --profile {profile}
-    monitor: bash {repo}/x monitor
-
-where `{profile}` is the toolbar selection (`auto` lets `./x` use the example's
-own). The profile maps to `ESP32S3_RTS_PROFILE` and selects the runtime
-(`crates/esp32s3_rts/<profile>-esp32s3`) — a profile-respecting example builds a
-different `.elf` per profile; some examples deliberately pin their profile in
-their own `build.sh`, where *Auto* is the right choice.
+    src/lspclient.*       Ada Language Server client (definition, hover, completion, format, rename, code actions)
+    src/serialmonitor.*   native QSerialPort serial console
+    packaging/            AppImage build script, AppRun hook, pinned manifest
+    docs/design-self-contained-ide.md  self-contained IDE design notes
