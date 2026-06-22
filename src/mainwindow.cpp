@@ -1711,15 +1711,30 @@ void MainWindow::onActionFinished(int exitCode)
 
 void MainWindow::setupDevice()
 {
-    // The installer lives in the SDK tree: {repo}/tools/install-udev.sh.
+    // The installer lives in an SDK tree at tools/install-udev.sh.  Look in the
+    // most-reliable places first: the AppImage's read-only bundle ($APPDIR/opt/sdk,
+    // always present and current), then the env the AppRun exports, then the repo
+    // resolved from the open project.  The installer only reads its sibling rule
+    // file and writes to /etc, so running it from the read-only bundle is fine.
     const CmdContext ctx = ctxForCurrent();
-    QString repo = ctx.repo;
-    if (repo.isEmpty()) repo = ctx.root;
-    const QString installer = QDir(repo).filePath("tools/install-udev.sh");
-    if (repo.isEmpty() || !QFileInfo::exists(installer)) {
+    QStringList roots;
+    if (const QString a = qEnvironmentVariable("APPDIR"); !a.isEmpty())
+        roots << QDir(a).filePath("opt/sdk");
+    roots << qEnvironmentVariable("ADAEDIT_HOME")
+          << qEnvironmentVariable("ESP32S3_ADA_SDK")
+          << ctx.repo << ctx.root;
+
+    QString installer;
+    for (const QString &r : roots) {
+        if (r.isEmpty()) continue;
+        const QString cand = QDir(r).filePath("tools/install-udev.sh");
+        if (QFileInfo::exists(cand)) { installer = cand; break; }
+    }
+    if (installer.isEmpty()) {
         QMessageBox::warning(this, tr("Set up device access"),
-            tr("Couldn't find the device-setup script (tools/install-udev.sh) for this "
-               "project.\n\nOpen an ESP32-S3 project/SDK folder first, then try again."));
+            tr("Couldn't find the device-setup script (tools/install-udev.sh).\n\n"
+               "In the full AppImage it ships in the bundled SDK; otherwise open an "
+               "ESP32-S3 project/SDK folder (one containing ./x) and try again."));
         return;
     }
 

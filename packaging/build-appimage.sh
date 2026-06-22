@@ -76,18 +76,44 @@ if [ "$BUNDLE" = full ]; then
     cp "$HERE/apprun-hook.sh" "$APPDIR/apprun-hooks/zz-adaedit.sh"
 fi
 
-echo "== linuxdeploy + qt plugin -> AppImage =="
+echo "== linuxdeploy + qt plugin (populate AppDir) =="
 export PATH="$TOOLS:$PATH"
 sfx=""; [ "$BUNDLE" = full ] && sfx="-full"
 export OUTPUT="AdaEdit${sfx}-$ARCH.AppImage"
 cd "$HERE"
+# NOTE: no --output here.  linuxdeploy's generated AppRun sources ONLY the qt
+# plugin hook *by name* -- a user-dropped apprun-hooks/*.sh is ignored -- so we
+# must edit AppRun to source ours BEFORE packaging, then package separately.
 "$TOOLS/linuxdeploy-$ARCH.AppImage" \
   --appdir "$APPDIR" \
   --executable "$APPDIR/usr/bin/adaedit" \
   --desktop-file "$HERE/adaedit.desktop" \
   --icon-file "$HERE/adaedit.png" \
-  --plugin qt \
-  --output appimage
+  --plugin qt
+
+# Wire our hook into AppRun (full bundle): export APPDIR for it, then source it,
+# just before AppRun execs the editor.  Idempotent.
+hook="$APPDIR/apprun-hooks/zz-adaedit.sh"
+if [ -f "$hook" ] && ! grep -q "zz-adaedit.sh" "$APPDIR/AppRun"; then
+    echo "== wiring AdaEdit AppRun hook into AppRun =="
+    awk '
+      /AppRun\.wrapped/ && !wired {
+        print "export APPDIR=\"${APPDIR:-$this_dir}\""
+        print "source \"$this_dir\"/apprun-hooks/zz-adaedit.sh"
+        wired = 1
+      }
+      { print }
+    ' "$APPDIR/AppRun" > "$APPDIR/AppRun.new"
+    mv "$APPDIR/AppRun.new" "$APPDIR/AppRun"
+    chmod +x "$APPDIR/AppRun"
+    grep -q "zz-adaedit.sh" "$APPDIR/AppRun" || { echo "AppRun hook injection failed" >&2; exit 1; }
+fi
+
+echo "== appimagetool -> AppImage =="
+fetch "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage" \
+      "$TOOLS/appimagetool-$ARCH.AppImage"
+rm -f "$HERE/$OUTPUT"
+ARCH="$ARCH" "$TOOLS/appimagetool-$ARCH.AppImage" "$APPDIR" "$HERE/$OUTPUT"
 
 echo "== done: $HERE/$OUTPUT =="
-ls -lh "$HERE"/AdaEdit*"$ARCH".AppImage
+ls -lh "$HERE/$OUTPUT"
