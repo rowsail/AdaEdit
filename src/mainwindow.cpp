@@ -2,6 +2,7 @@
 #include "adalexer.h"
 #include "debugger.h"
 #include "lspclient.h"
+#include "serialmonitor.h"
 
 #include <Qsci/qsciscintilla.h>
 
@@ -302,11 +303,19 @@ void MainWindow::createDocks()
     probDock->setWidget(m_problemsList);
     addDockWidget(Qt::BottomDockWidgetArea, probDock);
 
+    // Serial monitor: a native QSerialPort console (USB-Serial-JTAG output + send).
+    m_serial = new SerialMonitor(this);
+    connect(m_serial, &SerialMonitor::status, this,
+            [this](const QString &m) { statusBar()->showMessage(m, 4000); });
+    auto *serialDock = new QDockWidget(tr("Serial monitor"), this);
+    serialDock->setWidget(m_serial);
+    addDockWidget(Qt::BottomDockWidgetArea, serialDock);
+
     // Ordered list backing the View menu's show/hide toggles. Stable object
     // names give each dock toggle a stable command id ("view.<name>").
-    m_docks = {explorer, outDock, dbgDock, bpDock, varsDock, thrDock, stackDock, probDock};
+    m_docks = {explorer, outDock, dbgDock, bpDock, varsDock, thrDock, stackDock, probDock, serialDock};
     const char *dockNames[] = {"explorer", "output", "debugConsole", "breakpoints",
-                               "variables", "threads", "callStack", "problems"};
+                               "variables", "threads", "callStack", "problems", "serial"};
     for (int i = 0; i < m_docks.size(); ++i)
         m_docks[i]->setObjectName(QString::fromLatin1(dockNames[i]));
 }
@@ -1726,24 +1735,47 @@ void MainWindow::runAction(const QString &cmdTemplate, const QString &what)
     m_actionProc->start("/bin/sh", {"-c", cmd});
 }
 
+// Reveal/raise the serial-monitor dock; release its port so a flash can use it.
+void MainWindow::revealSerial()
+{
+    if (!m_serial) return;
+    for (QDockWidget *d : m_docks)
+        if (d->widget() == m_serial) { d->show(); d->raise(); }
+}
+void MainWindow::closeSerial() { if (m_serial && m_serial->isOpen()) m_serial->close(); }
+
 void MainWindow::doBuild()
 {
     saveAll();                                 // never build stale source
+    m_monitorAfterAction = false;
     if (const TargetProfile *t = m_project.active()) runAction(t->buildCommand, tr("Build"));
 }
 void MainWindow::doFlash()
 {
     saveAll();                                 // Flash compiles too
+    m_monitorAfterAction = false;
+    closeSerial();                             // the flasher needs the port
     if (const TargetProfile *t = m_project.active()) runAction(t->flashCommand, tr("Flash"));
 }
 void MainWindow::doRun()
 {
-    saveAll();                                 // Run = build + flash + run
-    if (const TargetProfile *t = m_project.active()) runAction(t->runCommand, tr("Run"));
+    // Run = build + flash, then open the serial monitor on success.  We drive the
+    // build+flash directly (not the old `x run`, whose shell monitor needs an
+    // interactive TTY and would hang a piped QProcess); the native monitor follows.
+    saveAll();
+    closeSerial();                             // the flasher needs the port
+    const TargetProfile *t = m_project.active();
+    if (!t) return;
+    runAction(t->flashCommand, tr("Run"));
+    m_monitorAfterAction = true;               // consumed by onActionFinished
 }
 void MainWindow::doMonitor()
 {
-    if (const TargetProfile *t = m_project.active()) runAction(t->monitorCommand, tr("Monitor"));
+    if (!m_serial) return;
+    revealSerial();
+    if (const QString p = qEnvironmentVariable("ESPPORT"); !p.isEmpty())
+        m_serial->setPortName(p);
+    if (!m_serial->isOpen()) m_serial->open();
 }
 
 void MainWindow::onActionOutput()
@@ -1790,6 +1822,12 @@ void MainWindow::onActionFinished(int exitCode)
         box.setDefaultButton(fix);
         box.exec();
         if (box.clickedButton() == fix) setupDevice();
+    }
+
+    // Run = build + flash + watch: open the serial monitor once the flash succeeds.
+    if (m_monitorAfterAction) {
+        m_monitorAfterAction = false;
+        if (exitCode == 0) doMonitor();
     }
 }
 

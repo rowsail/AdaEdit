@@ -182,6 +182,8 @@ private:
 
     CmdContext ctxForCurrent() const;
     QString sdkTool(const QString &rel) const;   // resolve an SDK file (bundle/env/repo)
+    void revealSerial();                          // show/raise the serial-monitor dock
+    void closeSerial();                           // release the serial port (for flashing)
     void runAction(const QString &cmdTemplate, const QString &what);
     void showDebugLine(const QString &fullPath, int line);
     void clearDebugLine();
@@ -205,12 +207,14 @@ private:
     QListWidget *m_threadsList = nullptr;
     QListWidget *m_stackList = nullptr;
     QListWidget *m_problemsList = nullptr;
+    class SerialMonitor *m_serial = nullptr;   // native QSerialPort console
     QHash<QString, QVector<LspClient::Diagnostic>> m_diagnostics;
     QTreeView *m_tree = nullptr;
     QFileSystemModel *m_fsModel = nullptr;
     class QProcess *m_actionProc = nullptr;
     QString m_actionLog;            // accumulated action output (for device-error detection)
     QString m_actionWhat;           // label of the running action ("Flash", "Run", …)
+    bool m_monitorAfterAction = false;   // open the serial monitor when this action succeeds
     Debugger *m_debugger = nullptr;
     LspClient *m_lsp = nullptr;
 

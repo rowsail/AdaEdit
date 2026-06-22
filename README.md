@@ -116,11 +116,11 @@ Only Qt5 + QScintilla — no other third-party libraries.
 
 ```sh
 # Debian/Ubuntu
-sudo apt install build-essential cmake qtbase5-dev qtbase5-dev-tools libqscintilla2-qt5-dev
+sudo apt install build-essential cmake qtbase5-dev qtbase5-dev-tools libqscintilla2-qt5-dev libqt5serialport5-dev
 # Fedora
-sudo dnf install gcc-c++ cmake qt5-qtbase-devel qscintilla-qt5-devel
+sudo dnf install gcc-c++ cmake qt5-qtbase-devel qscintilla-qt5-devel qt5-qtserialport-devel
 # Arch
-sudo pacman -S base-devel cmake qt5-base qscintilla-qt5
+sudo pacman -S base-devel cmake qt5-base qscintilla-qt5 qt5-serialport
 # macOS (Homebrew) — then:  cmake -S . -B build -DCMAKE_PREFIX_PATH=$(brew --prefix qt@5)
 brew install cmake qt@5 qscintilla2
 ```

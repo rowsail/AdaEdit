@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt5 REQUIRED COMPONENTS Widgets PrintSupport)
+find_package(Qt5 REQUIRED COMPONENTS Widgets PrintSupport SerialPort)
 
 # QScintilla ships no upstream CMake config, so locate it by hand. To work on
 # any distro / Homebrew (not just Debian multiarch), ask Qt's own qmake where its
@@ -53,11 +53,13 @@ add_executable(adaedit
     src/project.cpp
     src/debugger.cpp
     src/lspclient.cpp
+    src/serialmonitor.cpp
 )
 
 target_include_directories(adaedit PRIVATE ${QSCINTILLA_INCLUDE_DIR})
 target_link_libraries(adaedit PRIVATE
     Qt5::Widgets
     Qt5::PrintSupport
+    Qt5::SerialPort
     ${QSCINTILLA_LIBRARY}
 )

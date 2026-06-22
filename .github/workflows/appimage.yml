@@ -27,7 +27,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential cmake qtbase5-dev qtbase5-dev-tools libqscintilla2-qt5-dev \
+            build-essential cmake qtbase5-dev qtbase5-dev-tools libqscintilla2-qt5-dev libqt5serialport5-dev \
             git ca-certificates curl file libfuse2 xz-utils
       - uses: actions/checkout@v5
       - name: Build editor AppImage
@@ -54,7 +54,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential cmake qtbase5-dev qtbase5-dev-tools libqscintilla2-qt5-dev \
+            build-essential cmake qtbase5-dev qtbase5-dev-tools libqscintilla2-qt5-dev libqt5serialport5-dev \
             git ca-certificates curl wget file libfuse2 xz-utils unzip zstd python3
       - uses: actions/checkout@v5
       - name: Install Alire (build-time toolchain fetcher)
