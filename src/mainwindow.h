@@ -162,6 +162,9 @@ private:
     void applyWorkspaceEdit(const LspClient::WorkspaceEdit &edits);
     void requestCodeActions(QsciScintilla *e);                  // LSP code actions (refactor menu)
     void applyCodeAction(const LspClient::CodeAction &action);
+    void defineSemanticIndicators(QsciScintilla *e);            // theme-aware semantic colours
+    void requestSemanticTokens(QsciScintilla *e);               // fetch ALS semantic tokens
+    void applySemanticTokens(QsciScintilla *e, const QList<LspClient::SemToken> &toks);
     void applyDiagnostics(QsciScintilla *e);
     void refreshProblems();
     void showHoverPopup(const QString &text, const QPoint &globalPos);
@@ -227,6 +230,7 @@ private:
     bool m_monitorAfterAction = false;   // open the serial monitor when this action succeeds
     Debugger *m_debugger = nullptr;
     LspClient *m_lsp = nullptr;
+    class QTimer *m_semTimer = nullptr;   // debounce semantic-token refresh on edits
 
     // Debug current-line marker.
     QsciScintilla *m_markerEditor = nullptr;

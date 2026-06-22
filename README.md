@@ -224,6 +224,13 @@ and **Code actions** all flow over LSP/JSON-RPC; the buffer is synced before eac
 request. **Diagnostics** appear as squiggles and in a **Problems pane**.
 **Completion** (Ctrl+Space) draws from ALS.
 
+**Semantic highlighting** layers ALS's `semanticTokens` over the fast Scintilla
+lexer: identifiers are recoloured by their *meaning* — packages, types,
+subprograms, parameters and enum literals each get their own colour (theme-aware),
+something a lexer can't determine. It refreshes (debounced) as you type and falls
+back to plain lexer highlighting whenever ALS is absent or still indexing, so
+editing stays responsive.
+
 Note: ALS indexes the project for a few seconds after a file opens — a request
 made before indexing finishes may return "not found"; just retry.
 

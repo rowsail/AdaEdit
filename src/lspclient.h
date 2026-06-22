@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QJsonArray>
+#include <QStringList>
 #include <functional>
 
 class QProcess;
@@ -58,6 +59,11 @@ public:
     using FormatCallback = std::function<void(const QList<TextEdit> &edits)>;
     using RenameCallback = std::function<void(const WorkspaceEdit &edits, const QString &error)>;
     using CodeActionCallback = std::function<void(const QList<CodeAction> &actions)>;
+
+    // One semantic-highlighting token (absolute position + the server's type name,
+    // e.g. "type", "function", "namespace", "parameter", "enumMember").
+    struct SemToken { int line = 0, startChar = 0, length = 0; QString type; };
+    using SemanticTokensCallback = std::function<void(const QList<SemToken> &tokens)>;
     void definition(const QString &path, int line, int character, DefCallback cb);
     void hover(const QString &path, int line, int character, HoverCallback cb);
     void completion(const QString &path, int line, int character, CompletionCallback cb);
@@ -71,6 +77,8 @@ public:
                     int endLine, int endChar,
                     const QVector<Diagnostic> &diags, CodeActionCallback cb);
     void executeCommand(const QString &command, const QJsonArray &arguments);
+    void semanticTokens(const QString &path, SemanticTokensCallback cb);
+    bool hasSemanticTokens() const { return !m_semTokenTypes.isEmpty(); }
 
     static QString pathToUri(const QString &path);
     static QString uriToPath(const QString &uri);
@@ -101,6 +109,7 @@ private:
     QByteArray m_buf;
     int m_nextId = 1;
     bool m_ready = false;
+    QStringList m_semTokenTypes;        // server's semantic-token legend (index -> type)
     QHash<QString, int> m_versions;     // abs path -> document version
     QSet<QString> m_open;               // abs paths opened with the server
     QHash<int, std::function<void(const QJsonValue &)>> m_pending;

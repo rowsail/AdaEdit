@@ -13,6 +13,8 @@
 #include <QStandardPaths>
 #include <QRegularExpression>
 #include <QClipboard>
+#include <QTimer>
+#include <QPointer>
 
 #include <algorithm>
 
@@ -23,6 +25,29 @@ constexpr int MARK_BP_DISABLED = 3;  // disabled breakpoint (grey circle)
 constexpr int BP_MARGIN = 1;         // clickable symbol margin
 constexpr int INDIC_ERROR = 8;       // diagnostic squiggle (error)
 constexpr int INDIC_WARNING = 9;     // diagnostic squiggle (warning/info)
+// Semantic-highlighting overlays (INDIC_TEXTFORE: recolour the text on a range,
+// layered over the lexer).  One indicator per identifier class from ALS.
+constexpr int INDIC_TEXTFORE = 17;   // Scintilla INDIC_TEXTFORE
+constexpr int INDIC_SEM_NAMESPACE = 10;
+constexpr int INDIC_SEM_TYPE      = 11;
+constexpr int INDIC_SEM_FUNCTION  = 12;
+constexpr int INDIC_SEM_PARAMETER = 13;
+constexpr int INDIC_SEM_CONSTANT  = 14;   // enumMember
+constexpr int SEM_INDICATORS[] = {INDIC_SEM_NAMESPACE, INDIC_SEM_TYPE,
+                                  INDIC_SEM_FUNCTION, INDIC_SEM_PARAMETER, INDIC_SEM_CONSTANT};
+
+// Map an ALS semantic-token type name to one of our indicators (or -1 to leave
+// it to the lexer: keyword/comment/string/number/operator and plain variables).
+static int semIndicatorFor(const QString &type)
+{
+    if (type == "namespace") return INDIC_SEM_NAMESPACE;
+    if (type == "type" || type == "class" || type == "enum" || type == "interface"
+        || type == "struct" || type == "typeParameter") return INDIC_SEM_TYPE;
+    if (type == "function") return INDIC_SEM_FUNCTION;
+    if (type == "parameter") return INDIC_SEM_PARAMETER;
+    if (type == "enumMember") return INDIC_SEM_CONSTANT;
+    return -1;
+}
 
 // Walk up from a file/dir to the project root. The ./x launcher is the
 // definitive marker and always wins (it must run from the repo root, not the
@@ -165,6 +190,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_tabs->setMovable(true);
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::closeTab);
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::updateTitle);
+    connect(m_tabs, &QTabWidget::currentChanged, this,
+            [this](int) { requestSemanticTokens(currentEditor()); });
+
+    // Debounced semantic-highlight refresh: editors restart this on each edit.
+    m_semTimer = new QTimer(this);
+    m_semTimer->setSingleShot(true);
+    m_semTimer->setInterval(400);
+    connect(m_semTimer, &QTimer::timeout, this,
+            [this] { requestSemanticTokens(currentEditor()); });
     m_tabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_tabs->tabBar(), &QWidget::customContextMenuRequested,
             this, &MainWindow::onTabContextMenu);
@@ -362,6 +396,8 @@ QsciScintilla *MainWindow::newEditor()
     e->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(e, &QWidget::customContextMenuRequested, this, &MainWindow::onEditorContextMenu);
     connect(e, &QsciScintilla::modificationChanged, this, &MainWindow::updateTitle);
+    connect(e, &QsciScintilla::textChanged, this,
+            [this] { if (m_semTimer) m_semTimer->start(); });   // refresh semantic colours
     return e;
 }
 
@@ -771,9 +807,34 @@ void MainWindow::applyTheme()
 }
 
 // Editor colours (Scintilla manages its own; it does not follow QPalette).
+// Define the semantic-highlight indicators (INDIC_TEXTFORE) with theme-aware
+// colours.  Existing token fills keep their indicator number, so a theme switch
+// recolours them automatically (no re-fetch needed).
+void MainWindow::defineSemanticIndicators(QsciScintilla *e)
+{
+    auto def = [&](int ind, const QColor &c) {
+        e->SendScintilla(QsciScintilla::SCI_INDICSETSTYLE, (unsigned long)ind, (long)INDIC_TEXTFORE);
+        e->setIndicatorForegroundColor(c, ind);
+    };
+    if (m_darkMode) {
+        def(INDIC_SEM_NAMESPACE, QColor("#c586c0"));   // packages
+        def(INDIC_SEM_TYPE,      QColor("#4ec9b0"));   // types
+        def(INDIC_SEM_FUNCTION,  QColor("#dcdcaa"));   // subprograms
+        def(INDIC_SEM_PARAMETER, QColor("#9cdcfe"));   // parameters
+        def(INDIC_SEM_CONSTANT,  QColor("#4fc1ff"));   // enum literals
+    } else {
+        def(INDIC_SEM_NAMESPACE, QColor("#6f42c1"));
+        def(INDIC_SEM_TYPE,      QColor("#267f99"));
+        def(INDIC_SEM_FUNCTION,  QColor("#795e26"));
+        def(INDIC_SEM_PARAMETER, QColor("#1a56c4"));
+        def(INDIC_SEM_CONSTANT,  QColor("#098658"));
+    }
+}
+
 void MainWindow::applyEditorTheme(QsciScintilla *e)
 {
     applyAdaLexer(e, m_editorFont, m_darkMode);
+    defineSemanticIndicators(e);
     if (m_darkMode) {
         e->setCaretLineBackgroundColor(QColor("#2a2d2e"));
         e->setCaretForegroundColor(QColor("#d4d4d4"));
@@ -1338,6 +1399,8 @@ void MainWindow::ensureLsp(const QString &file)
             [this](const QString &m) { statusBar()->showMessage(m, 3000); });
     connect(m_lsp, &LspClient::diagnosticsPublished, this, &MainWindow::onDiagnostics);
     connect(m_lsp, &LspClient::applyEditRequested, this, &MainWindow::applyWorkspaceEdit);
+    connect(m_lsp, &LspClient::ready, this,
+            [this] { requestSemanticTokens(currentEditor()); });   // colour once ALS is up
     m_lsp->start(als, root, gpr);
 }
 
@@ -1636,6 +1699,34 @@ void MainWindow::applyCodeAction(const LspClient::CodeAction &action)
         m_lsp->executeCommand(action.command, action.arguments);
     else
         statusBar()->showMessage(tr("'%1' produced no changes").arg(action.title), 3000);
+}
+
+// Semantic highlighting: ask ALS to classify the identifiers in the current file
+// and overlay colours on top of the lexer.  Best-effort -- no-op if ALS is absent,
+// not yet ready, or doesn't support semantic tokens.
+void MainWindow::requestSemanticTokens(QsciScintilla *e)
+{
+    if (!e || !m_lsp || !m_lsp->isRunning() || !m_lsp->hasSemanticTokens()) return;
+    const QString path = editorPath(e);
+    if (path.isEmpty() || !isAdaFile(path)) return;
+    m_lsp->didChange(path, e->text());
+    QPointer<QsciScintilla> guard(e);                 // the tab may close before the reply
+    m_lsp->semanticTokens(path, [this, guard](const QList<LspClient::SemToken> &toks) {
+        if (guard) applySemanticTokens(guard, toks);
+    });
+}
+
+void MainWindow::applySemanticTokens(QsciScintilla *e, const QList<LspClient::SemToken> &toks)
+{
+    if (!e) return;
+    const int last = qMax(0, e->lines() - 1);
+    const int lastLen = e->lineLength(last);
+    for (int ind : SEM_INDICATORS) e->clearIndicatorRange(0, 0, last, lastLen, ind);
+    for (const LspClient::SemToken &t : toks) {
+        const int ind = semIndicatorFor(t.type);
+        if (ind < 0 || t.length <= 0) continue;
+        e->fillIndicatorRange(t.line, t.startChar, t.line, t.startChar + t.length, ind);
+    }
 }
 
 void MainWindow::triggerCompletion()

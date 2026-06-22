@@ -85,6 +85,20 @@ void LspClient::start(const QString &serverPath, const QString &rootPath, const 
             {"valueSet", QJsonArray{"quickfix", "refactor", "refactor.extract",
                                     "refactor.inline", "refactor.rewrite", "source"}}}}}},
     };
+    // Semantic highlighting: ask the server to classify identifiers (type vs
+    // variable vs subprogram vs package …) -- richer than the lexer can be.  We
+    // declare the standard LSP token legend; ALS replies with the subset it uses.
+    tdCaps["semanticTokens"] = QJsonObject{
+        {"dynamicRegistration", false},
+        {"requests", QJsonObject{{"full", true}}},
+        {"formats", QJsonArray{"relative"}},
+        {"tokenTypes", QJsonArray{"namespace","type","class","enum","interface","struct",
+            "typeParameter","parameter","variable","property","enumMember","event","function",
+            "method","macro","keyword","modifier","comment","string","number","regexp",
+            "operator","decorator"}},
+        {"tokenModifiers", QJsonArray{"declaration","definition","readonly","static","deprecated",
+            "abstract","async","modification","documentation","defaultLibrary"}},
+    };
     QJsonObject caps;
     caps["textDocument"] = tdCaps;
     // We can apply server-pushed edits and run server commands (command-based
@@ -101,7 +115,15 @@ void LspClient::start(const QString &serverPath, const QString &rootPath, const 
     params["initializationOptions"] = initOpts;
 
     emit log(tr("ALS: initialize (project %1)").arg(projectFile.isEmpty() ? "<auto>" : projectFile));
-    sendRequest("initialize", params, [this](const QJsonValue &) {
+    sendRequest("initialize", params, [this](const QJsonValue &result) {
+        // Record the server's semantic-token legend (maps a token's type index to
+        // a name); empty if the server doesn't support semantic tokens.
+        m_semTokenTypes.clear();
+        const QJsonArray tt = result.toObject().value("capabilities").toObject()
+            .value("semanticTokensProvider").toObject().value("legend").toObject()
+            .value("tokenTypes").toArray();
+        for (const QJsonValue &v : tt) m_semTokenTypes << v.toString();
+
         sendNotification("initialized", QJsonObject{}, true);
         m_ready = true;
         for (const QJsonObject &m : m_queue) writeMessage(m);
@@ -452,4 +474,28 @@ void LspClient::executeCommand(const QString &command, const QJsonArray &argumen
     sendRequest("workspace/executeCommand",
                 QJsonObject{{"command", command}, {"arguments", arguments}},
                 [](const QJsonValue &) {});   // effect arrives via workspace/applyEdit
+}
+
+void LspClient::semanticTokens(const QString &path, SemanticTokensCallback cb)
+{
+    if (m_semTokenTypes.isEmpty()) { cb({}); return; }   // server has no legend
+    QJsonObject params{{"textDocument", docId(path)}};
+    sendRequest("textDocument/semanticTokens/full", params, [this, cb](const QJsonValue &result) {
+        // `data` is a flat int array, 5 per token (LSP "relative" encoding):
+        // deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModifiers.
+        QList<SemToken> out;
+        const QJsonArray data = result.toObject().value("data").toArray();
+        int line = 0, ch = 0;
+        for (int i = 0; i + 5 <= data.size(); i += 5) {
+            const int dLine = data[i].toInt();
+            const int dCh   = data[i + 1].toInt();
+            if (dLine == 0) { ch += dCh; } else { line += dLine; ch = dCh; }
+            SemToken t;
+            t.line = line; t.startChar = ch; t.length = data[i + 2].toInt();
+            const int ix = data[i + 3].toInt();
+            if (ix >= 0 && ix < m_semTokenTypes.size()) t.type = m_semTokenTypes[ix];
+            out.push_back(t);
+        }
+        cb(out);
+    });
 }
