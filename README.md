@@ -94,6 +94,37 @@ The explorer tree roots at the project folder; double-click any file to open it.
 - **Show runtime path** (Build menu) echoes the runtime directory a build will
   link, flagging when that runtime isn't built yet.
 
+## The bundled SDK
+
+The full AppImage bundles the **`ada_esp32s3` SDK**; on first run it seeds a
+writable copy at
+
+```
+~/.local/share/adaedit/sdk
+```
+
+This is where the `./x` / `esp32-ada` launchers, the ESP32-S3 runtime (the
+`light-tasking` / `embedded` / `full` profiles) and the build scripts live, and
+where build outputs and compiled runtimes are written. AppImage updates re-sync
+bundled SDK fixes into it automatically. It includes:
+
+- **Peripheral drivers — a HAL, still under active development.** A reusable
+  hardware-abstraction layer in `libs/esp32s3_hal/`: packages such as
+  `ESP32S3.GPIO`, `ESP32S3.UART`, `ESP32S3.SPI`, `ESP32S3.I2C`, `ESP32S3.ADC`,
+  `ESP32S3.Timer`, `ESP32S3.RMT`, `ESP32S3.LEDC`, `ESP32S3.I2S`, `ESP32S3.RTC`,
+  `ESP32S3.RNG`, `ESP32S3.Temperature`, … over an svd2ada-generated register
+  layer. **Coverage and APIs are still evolving** — expect gaps and changes. A
+  new project's `app.gpr` already `with`s the HAL, so `with ESP32S3.GPIO;` works
+  out of the box. (Some handle-based drivers need the *embedded* or *full*
+  profile; the lock-free ones — GPIO, RNG, Temperature — build under all profiles.)
+- **Examples** in `examples/` — a worked project per peripheral, e.g.
+  `esp32s3_gpio0_blink`, `esp32s3_adc_read`, `esp32s3_i2c_loopback`,
+  `esp32s3_timer_count`, `esp32s3_rmt_loopback`, `esp32s3_lcd_i8080`. Open one with
+  **File ▸ Open project** to build / flash / debug it as a starting point.
+
+(Building from source instead of the AppImage? Point the editor at a checkout of
+the [`ada_esp32s3`](https://github.com/rowsail/ada_esp32s3) SDK — the same tree.)
+
 ## Serial monitor
 
 A native **Serial monitor** dock backed by Qt's `QSerialPort` — no external
