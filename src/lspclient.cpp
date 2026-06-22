@@ -74,6 +74,7 @@ void LspClient::start(const QString &serverPath, const QString &rootPath, const 
     tdCaps["completion"] = completion;
     tdCaps["formatting"] = QJsonObject{{"dynamicRegistration", false}};
     tdCaps["rangeFormatting"] = QJsonObject{{"dynamicRegistration", false}};
+    tdCaps["rename"] = QJsonObject{{"dynamicRegistration", false}, {"prepareSupport", false}};
     QJsonObject caps;
     caps["textDocument"] = tdCaps;
 
@@ -348,4 +349,39 @@ void LspClient::rangeFormatting(const QString &path, int startLine, int startCha
     QJsonObject params{{"textDocument", docId(path)}, {"range", range}, {"options", options}};
     sendRequest("textDocument/rangeFormatting", params,
                 [cb](const QJsonValue &result) { cb(parseEdits(result)); });
+}
+
+// A WorkspaceEdit has either `documentChanges` (array of {textDocument, edits})
+// or `changes` (object uri -> TextEdit[]).  ALS uses documentChanges for rename.
+static LspClient::WorkspaceEdit parseWorkspaceEdit(const QJsonValue &result)
+{
+    LspClient::WorkspaceEdit out;
+    const QJsonObject we = result.toObject();
+    if (we.contains("documentChanges")) {
+        for (const QJsonValue &v : we.value("documentChanges").toArray()) {
+            const QJsonObject dc = v.toObject();
+            if (!dc.contains("edits")) continue;       // skip create/rename/delete file ops
+            const QString uri = dc.value("textDocument").toObject().value("uri").toString();
+            out[uri] += parseEdits(dc.value("edits"));
+        }
+    } else if (we.contains("changes")) {
+        const QJsonObject ch = we.value("changes").toObject();
+        for (auto it = ch.begin(); it != ch.end(); ++it)
+            out[it.key()] += parseEdits(it.value());
+    }
+    return out;
+}
+
+void LspClient::rename(const QString &path, int line, int character,
+                       const QString &newName, RenameCallback cb)
+{
+    QJsonObject params{{"textDocument", docId(path)},
+                       {"position", position(line, character)},
+                       {"newName", newName}};
+    sendRequest("textDocument/rename", params, [cb](const QJsonValue &result) {
+        if (!result.isObject()) { cb(WorkspaceEdit(), tr("rename not available here")); return; }
+        const WorkspaceEdit edits = parseWorkspaceEdit(result);
+        if (edits.isEmpty()) { cb(edits, tr("no occurrences to rename")); return; }
+        cb(edits, QString());
+    });
 }

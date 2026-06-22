@@ -439,6 +439,8 @@ void MainWindow::createMenus()
     edit->addSeparator();
     registerCmd(edit->addAction(tr("&Format (Ada)"), this, &MainWindow::formatCurrent),
                 "edit.format", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
+    registerCmd(edit->addAction(tr("Re&name symbol..."), this, &MainWindow::renameSymbolAtCursor),
+                "edit.rename", QKeySequence(Qt::Key_F2));
 
     // View: one checkable entry per dock. QDockWidget::toggleViewAction() is
     // already checkable, shows/hides the dock, and unticks itself when the dock
@@ -1508,6 +1510,66 @@ void MainWindow::gotoDefinitionAtCursor()
     requestDefinition(e, line, index);
 }
 
+void MainWindow::renameSymbolAtCursor()
+{
+    QsciScintilla *e = currentEditor();
+    if (!e) return;
+    int line, index;
+    e->getCursorPosition(&line, &index);
+    renameSymbol(e, line, index);
+}
+
+// Refactor: rename the symbol at (line,index) project-wide via the language
+// server.  ALS returns a WorkspaceEdit spanning every file that references it.
+void MainWindow::renameSymbol(QsciScintilla *e, int line, int index)
+{
+    if (!m_lsp || !m_lsp->isRunning()) {
+        statusBar()->showMessage(tr("Language server not available"), 3000);
+        return;
+    }
+    const QString path = editorPath(e);
+    if (path.isEmpty()) {
+        statusBar()->showMessage(tr("Save the file before renaming"), 4000);
+        return;
+    }
+    const QString oldName = e->wordAtLineIndex(line, index);
+    if (oldName.isEmpty()) {
+        statusBar()->showMessage(tr("Place the cursor on a name to rename"), 3000);
+        return;
+    }
+    bool ok = false;
+    const QString newName = QInputDialog::getText(
+        this, tr("Rename symbol"), tr("Rename '%1' to:").arg(oldName),
+        QLineEdit::Normal, oldName, &ok).trimmed();
+    if (!ok || newName.isEmpty() || newName == oldName) return;
+
+    m_lsp->didChange(path, e->text());          // rename the latest text
+    m_lsp->rename(path, line, index, newName, [this](const LspClient::WorkspaceEdit &edits,
+                                                     const QString &error) {
+        if (!error.isEmpty()) { statusBar()->showMessage(tr("Rename: %1").arg(error), 4000); return; }
+        applyWorkspaceEdit(edits);
+    });
+}
+
+// Apply a multi-file WorkspaceEdit: open each touched file and apply its edits.
+// Files are left modified so the rename is reviewable / undoable; Save All commits.
+void MainWindow::applyWorkspaceEdit(const LspClient::WorkspaceEdit &edits)
+{
+    int files = 0, count = 0;
+    for (auto it = edits.constBegin(); it != edits.constEnd(); ++it) {
+        const QString filePath = LspClient::uriToPath(it.key());
+        QsciScintilla *t = openOrActivate(filePath);
+        if (!t) continue;
+        applyTextEdits(t, it.value());
+        ++files;
+        count += it.value().size();
+    }
+    if (files == 0) { statusBar()->showMessage(tr("Rename: nothing changed"), 3000); return; }
+    statusBar()->showMessage(
+        tr("Renamed %n occurrence(s) in %1 file(s) — review and Save All", "", count).arg(files),
+        6000);
+}
+
 void MainWindow::triggerCompletion()
 {
     QsciScintilla *e = currentEditor();
@@ -2000,6 +2062,9 @@ void MainWindow::onEditorContextMenu(const QPoint &pos)
     QAction *fmt = menu.addAction(e->hasSelectedText() ? tr("Format selection")
                                                        : tr("Format document"));
     fmt->setEnabled(ada);
+    QMenu *refactor = menu.addMenu(tr("Refactor"));
+    refactor->setEnabled(ada);
+    QAction *ren = refactor->addAction(tr("Rename symbol…"));
     menu.addSeparator();
     QAction *bp = menu.addAction(has ? tr("Clear breakpoint") : tr("Set breakpoint"));
     menu.addSeparator();
@@ -2017,6 +2082,7 @@ void MainWindow::onEditorContextMenu(const QPoint &pos)
     if (chosen == def)        requestDefinition(e, defLine, defIndex);
     else if (chosen == hov)   requestHover(e, defLine, defIndex, e->mapToGlobal(pos));
     else if (chosen == fmt)   requestFormat(e);
+    else if (chosen == ren)   renameSymbol(e, defLine, defIndex);
     else if (chosen == bp)    toggleBreakpoint(e, line);
     else if (chosen == cut)   e->cut();
     else if (chosen == copy)  e->copy();

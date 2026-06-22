@@ -36,10 +36,14 @@ public:
         QString newText;
     };
 
+    // A WorkspaceEdit: edits grouped by document URI (rename spans many files).
+    using WorkspaceEdit = QHash<QString, QList<TextEdit>>;
+
     using DefCallback = std::function<void(const QString &uri, int line, int character)>;
     using HoverCallback = std::function<void(const QString &text)>;
     using CompletionCallback = std::function<void(const QStringList &items)>;
     using FormatCallback = std::function<void(const QList<TextEdit> &edits)>;
+    using RenameCallback = std::function<void(const WorkspaceEdit &edits, const QString &error)>;
     void definition(const QString &path, int line, int character, DefCallback cb);
     void hover(const QString &path, int line, int character, HoverCallback cb);
     void completion(const QString &path, int line, int character, CompletionCallback cb);
@@ -47,6 +51,8 @@ public:
     void rangeFormatting(const QString &path, int startLine, int startChar,
                          int endLine, int endChar, int tabSize, bool insertSpaces,
                          FormatCallback cb);
+    void rename(const QString &path, int line, int character,
+                const QString &newName, RenameCallback cb);
 
     static QString pathToUri(const QString &path);
     static QString uriToPath(const QString &uri);

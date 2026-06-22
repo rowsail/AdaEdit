@@ -124,6 +124,7 @@ private slots:
     void onMarginClicked(int margin, int line, Qt::KeyboardModifiers state);
     void onEditorContextMenu(const QPoint &pos);
     void gotoDefinitionAtCursor();
+    void renameSymbolAtCursor();   // refactor: rename the symbol under the cursor (F2)
     void triggerCompletion();
     void onDiagnostics(const QString &path, const QVector<LspClient::Diagnostic> &diags);
     void onProblemActivated(QListWidgetItem *item);
@@ -156,6 +157,8 @@ private:
     void requestHover(QsciScintilla *e, int line, int index, const QPoint &anchorGlobal);
     void requestFormat(QsciScintilla *e);
     void applyTextEdits(QsciScintilla *e, const QList<LspClient::TextEdit> &edits);
+    void renameSymbol(QsciScintilla *e, int line, int index);   // LSP rename (refactor)
+    void applyWorkspaceEdit(const LspClient::WorkspaceEdit &edits);
     void applyDiagnostics(QsciScintilla *e);
     void refreshProblems();
     void showHoverPopup(const QString &text, const QPoint &globalPos);
