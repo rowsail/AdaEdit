@@ -148,10 +148,17 @@ fails.
   `AppRun` all bundled; verified it launches and renders from its own libs).
   Still TODO for distribution: build on an old glibc base (e.g. Ubuntu 20.04) for
   broad-distro compatibility.
-- **Phase 2 — Full toolchain bundle.** Add the cross-toolchain, ALS,
-  OpenOCD/gdb, the bare-metal tree with prebuilt runtimes; implement `AppRun`
-  env + first-run workspace seeding; wire the editor's `{repo}` / debug paths to
-  the bundle.
+- **Phase 2 — Full toolchain bundle. (mechanism done; full build is CI)**
+  `BUNDLE=full packaging/build-appimage.sh` FETCHES the external packages
+  (pinned in `packaging/manifest.env`: the SDK with runtime packs, the GNAT
+  toolchains via Alire, ALS, and OpenOCD/gdb via the SDK's `get-*` scripts) into
+  `AppDir/opt/` — nothing is committed.  `packaging/apprun-hook.sh` (a linuxdeploy
+  AppRun hook) sets `ESP32S3_ADA_TOOLCHAINS` to the bundle, puts ALS/debug/SDK
+  on `PATH`, and **seeds a writable SDK workspace** (`$XDG_DATA_HOME/adaedit/sdk`)
+  on first run since the AppImage FS is read-only.  Verified: with a pristine SDK
+  template + the toolchain referenced, sourcing the hook seeds the workspace and
+  `x build gpio0_blink` produces `app.bin` there — offline, read-only template
+  untouched.  The ~1.5 GB fetch+package itself runs in CI (Phase 4).
 - **Phase 3 — Device access.** Ship the udev rule + `sudo` installer and an
   in-editor "device not accessible — run setup" path.
 - **Phase 4 — CI artifact.** Extend GitHub Actions to build and upload the
