@@ -4,6 +4,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QRegularExpression>
+#include <QFileInfo>
 #include <csignal>
 #include <sys/types.h>
 
@@ -141,6 +142,7 @@ void Debugger::launchGdb()
         sendMi("-interpreter-exec console \"monitor halt\"");
         m_bkptNumbers.clear();
         m_bkptTokens.clear();
+        m_bkptRetried.clear();
         for (const Breakpoint &b : m_breakpoints)
             insertBreakpointNow(b);
         setState(Stopped);
@@ -162,6 +164,7 @@ void Debugger::armEntryBreakpoint()
     // (Re)insert the user's source-line breakpoints for this session.
     m_bkptNumbers.clear();
     m_bkptTokens.clear();
+    m_bkptRetried.clear();
     for (const Breakpoint &b : m_breakpoints)
         insertBreakpointNow(b);
 }
@@ -171,11 +174,16 @@ QString Debugger::bpKey(const QString &file, int line)
     return file + ':' + QString::number(line);
 }
 
-void Debugger::insertBreakpointNow(const Breakpoint &b)
+void Debugger::insertBreakpointNow(const Breakpoint &b, bool basenameOnly)
 {
     const int tok = ++m_token;
     m_bkptTokens.insert(tok, b);
-    sendMiToken(tok, QStringLiteral("-break-insert %1:%2").arg(b.file).arg(b.line));
+    // Default: the full path (precise). On a "no source file" retry, fall back to
+    // the basename, which GDB matches by filename regardless of the DWARF comp_dir
+    // (handles a project built at one path but opened at another).
+    const QString loc = basenameOnly ? QFileInfo(b.file).fileName() : b.file;
+    if (basenameOnly) m_bkptRetried.insert(bpKey(b.file, b.line));
+    sendMiToken(tok, QStringLiteral("-break-insert %1:%2").arg(loc).arg(b.line));
 }
 
 void Debugger::addBreakpoint(const QString &file, int line)
@@ -201,6 +209,18 @@ void Debugger::removeBreakpoint(const QString &file, int line)
         && m_gdb->state() == QProcess::Running)
         sendMi(QStringLiteral("-break-delete %1").arg(m_bkptNumbers.value(key)));
     m_bkptNumbers.remove(key);
+    emit breakpointsChanged();
+}
+
+void Debugger::clearBreakpoints()
+{
+    if (m_gdb && m_gdb->state() == QProcess::Running)
+        for (int num : m_bkptNumbers)
+            sendMi(QStringLiteral("-break-delete %1").arg(num));
+    m_breakpoints.clear();
+    m_bkptNumbers.clear();
+    m_bkptTokens.clear();
+    m_bkptRetried.clear();
     emit breakpointsChanged();
 }
 
@@ -400,6 +420,15 @@ void Debugger::handleLine(const QString &line)
                     QString msg = line;
                     if (auto m = QRegularExpression("msg=\"(.*)\"").match(line); m.hasMatch())
                         msg = miUnquote("\"" + m.captured(1) + "\"");
+                    // A path GDB couldn't match -> retry once by basename before
+                    // giving up (the project may have been built elsewhere).
+                    const QString key = bpKey(req.file, req.line);
+                    if (msg.contains("No source file", Qt::CaseInsensitive)
+                        && !m_bkptRetried.contains(key)) {
+                        insertBreakpointNow(req, /*basenameOnly=*/true);
+                        return;
+                    }
+                    m_bkptRetried.remove(key);
                     for (int i = 0; i < m_breakpoints.size(); ++i)
                         if (m_breakpoints[i].file == req.file && m_breakpoints[i].line == req.line) {
                             m_breakpoints.remove(i); break;

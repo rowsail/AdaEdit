@@ -1023,8 +1023,26 @@ void MainWindow::openFolder()
         openFolderPath(dir);
 }
 
+// Breakpoints belong to a project's source files; drop them (and their gutter
+// markers) so they don't leak into the next project -- a stale breakpoint with a
+// path GDB can't match made debugging a freshly-opened project fail until restart.
+void MainWindow::clearAllBreakpoints()
+{
+    m_debugger->clearBreakpoints();            // refreshes the dock via breakpointsChanged
+    for (int i = 0; i < m_tabs->count(); ++i)
+        if (auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(i))) {
+            e->markerDeleteAll(MARK_BREAKPOINT);
+            e->markerDeleteAll(MARK_BP_DISABLED);
+        }
+}
+
 void MainWindow::openFolderPath(const QString &path)
 {
+    // Switching to a different project root: its breakpoints no longer apply.
+    if (!m_project.rootPath.isEmpty() &&
+        QFileInfo(path).absoluteFilePath() != QFileInfo(m_project.rootPath).absoluteFilePath())
+        clearAllBreakpoints();
+
     m_tree->setRootIndex(m_fsModel->setRootPath(path));
 
     // An explicit .adaproj wins.  Otherwise pick the command set that matches the
@@ -1807,7 +1825,11 @@ void MainWindow::openProject()
     }
     // The project lives where its file does (rootPath isn't serialized, and
     // load() leaves the previous project's rootPath untouched -- so set it here).
-    m_project.rootPath = QFileInfo(path).absolutePath();
+    const QString newRoot = QFileInfo(path).absolutePath();
+    if (!m_project.rootPath.isEmpty() &&
+        QFileInfo(newRoot).absoluteFilePath() != QFileInfo(m_project.rootPath).absoluteFilePath())
+        clearAllBreakpoints();
+    m_project.rootPath = newRoot;
     m_tree->setRootIndex(m_fsModel->setRootPath(m_project.rootPath));   // repoint explorer
     const QString main = QDir(m_project.rootPath).filePath("src/main.adb");
     if (QFileInfo::exists(main)) openOrActivate(main);

@@ -158,6 +158,7 @@ private:
     void requestHover(QsciScintilla *e, int line, int index, const QPoint &anchorGlobal);
     void requestFormat(QsciScintilla *e);
     void applyTextEdits(QsciScintilla *e, const QList<LspClient::TextEdit> &edits);
+    void clearAllBreakpoints();    // drop breakpoints + gutter markers (project switch)
     void renameSymbol(QsciScintilla *e, int line, int index);   // LSP rename (refactor)
     void applyWorkspaceEdit(const LspClient::WorkspaceEdit &edits);
     void requestCodeActions(QsciScintilla *e);                  // LSP code actions (refactor menu)

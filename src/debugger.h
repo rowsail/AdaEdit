@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QVector>
 #include <QHash>
+#include <QSet>
 #include <QList>
 #include "project.h"
 
@@ -46,6 +47,7 @@ public:
     // and are (re)inserted whenever a session starts; toggled live if running.
     void addBreakpoint(const QString &file, int line);
     void removeBreakpoint(const QString &file, int line);
+    void clearBreakpoints();          // drop all (e.g. when switching projects)
     void setBreakpointEnabled(const QString &file, int line, bool enabled);
     QList<int> breakpointLines(const QString &file) const;
     QVector<Breakpoint> breakpoints() const { return m_breakpoints; }
@@ -87,7 +89,7 @@ private:
     void launchGdb();
     void armEntryBreakpoint();
     void requestFrameState();        // refresh thread list + locals
-    void insertBreakpointNow(const Breakpoint &b);
+    void insertBreakpointNow(const Breakpoint &b, bool basenameOnly = false);
     void sendMi(const QString &cmd);
     void sendMiToken(int token, const QString &cmd);
     void handleLine(const QString &line);
@@ -106,6 +108,7 @@ private:
     QVector<Breakpoint> m_breakpoints;        // user breakpoints (persist)
     QHash<QString, int> m_bkptNumbers;        // key -> gdb breakpoint number
     QHash<int, Breakpoint> m_bkptTokens;      // MI token -> requested bp (awaiting result)
+    QSet<QString> m_bkptRetried;              // keys already retried by basename
     int m_localsToken = -1;                   // MI token for the pending locals query
     int m_threadsToken = -1;                  // MI token for the pending thread-info query
     int m_stackToken = -1;                    // MI token for the pending stack query
