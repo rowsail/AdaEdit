@@ -11,13 +11,23 @@
 # gprbuild from here (Alire-free -- see the SDK's tools/sdk-env.sh).
 export ESP32S3_ADA_TOOLCHAINS="$APPDIR/opt/toolchains"
 
-# First run: copy the read-only SDK template into a writable per-user workspace.
+# Seed a WRITABLE SDK workspace from the read-only bundle (the AppImage FS is
+# read-only; builds must write obj/, app.bin and unpacked runtimes somewhere).
+# Re-sync from the bundle whenever the AppImage is updated (.sdk-version differs)
+# so bundled SDK fixes -- e.g. tools/openocd.sh -- reach an EXISTING workspace.
+# cp -a of the bundle OVER the workspace overwrites tracked SDK files but leaves
+# the user's build outputs / compiled runtimes intact (they aren't in the bundle).
 __ae_data="${XDG_DATA_HOME:-$HOME/.local/share}/adaedit"
 __ae_sdk="$__ae_data/sdk"
+__bundle_ver="$(cat "$APPDIR/opt/sdk/.sdk-version" 2>/dev/null)"
+__ws_ver="$(cat "$__ae_sdk/.sdk-version" 2>/dev/null)"
 if [ ! -e "$__ae_sdk/tools/bin/esp32-ada" ]; then
     echo "AdaEdit: first run -- seeding SDK workspace at $__ae_sdk" >&2
     mkdir -p "$__ae_data"
     cp -a "$APPDIR/opt/sdk" "$__ae_sdk"
+elif [ -n "$__bundle_ver" ] && [ "$__bundle_ver" != "$__ws_ver" ]; then
+    echo "AdaEdit: updating bundled SDK in workspace (${__ws_ver:-old} -> $__bundle_ver)" >&2
+    cp -a "$APPDIR/opt/sdk/." "$__ae_sdk/"
 fi
 export ESP32S3_ADA_SDK="$__ae_sdk"
 

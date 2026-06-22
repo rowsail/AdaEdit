@@ -42,6 +42,9 @@ if [ "$BUNDLE" = full ]; then
     git clone --depth 1 --branch "$SDK_REF" "$SDK_REPO" "$tmp/sdk"
     mkdir -p "$APPDIR/opt/sdk"
     ( cd "$tmp/sdk" && git archive HEAD ) | tar -x -C "$APPDIR/opt/sdk"   # committed files only
+    # Stamp the SDK commit so the AppRun hook can re-sync an existing workspace
+    # when the bundle is updated (delivers SDK fixes like tools/openocd.sh).
+    echo "$SDK_REF $(git -C "$tmp/sdk" rev-parse HEAD)" > "$APPDIR/opt/sdk/.sdk-version"
 
     echo "  -- GNAT toolchains (Alire-fetched) -> opt/toolchains"
     command -v alr >/dev/null || { echo "need 'alr' to fetch toolchains" >&2; exit 1; }
