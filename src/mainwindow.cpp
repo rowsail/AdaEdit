@@ -457,6 +457,9 @@ void MainWindow::createMenus()
                 "project.new");
     registerCmd(file->addAction(tr("Open pro&ject..."), this, &MainWindow::openProject),
                 "project.open", QKeySequence(Qt::CTRL | Qt::Key_K, Qt::CTRL | Qt::Key_O));
+    m_recentMenu = file->addMenu(tr("Recent pro&jects"));
+    m_recentMenu->setToolTipsVisible(true);
+    rebuildRecentMenu();
     registerCmd(file->addAction(tr("Save project as... (&duplicate)"), this, &MainWindow::saveProjectAs),
                 "project.saveAs");
     file->addSeparator();
@@ -1123,8 +1126,53 @@ void MainWindow::clearAllBreakpoints()
         }
 }
 
+// Persisted MRU list of opened project folders (most-recent first, max 10).
+void MainWindow::addRecentProject(const QString &path)
+{
+    const QString abs = QFileInfo(path).absoluteFilePath();
+    if (abs.isEmpty()) return;
+    QStringList recents = QSettings().value("recentProjects").toStringList();
+    recents.removeAll(abs);
+    recents.prepend(abs);
+    while (recents.size() > 10) recents.removeLast();
+    QSettings s;
+    s.setValue("recentProjects", recents);
+    s.sync();                                // persist immediately
+    rebuildRecentMenu();
+}
+
+void MainWindow::rebuildRecentMenu()
+{
+    if (!m_recentMenu) return;
+    m_recentMenu->clear();
+    const QString home = QDir::homePath();
+    QStringList recents = QSettings().value("recentProjects").toStringList();
+    int n = 0;
+    for (const QString &p : recents) {
+        if (!QFileInfo(p).isDir()) continue;            // skip projects that have moved/gone
+        QString disp = p;
+        if (disp.startsWith(home + '/')) disp = "~" + disp.mid(home.size());
+        const QString label = (++n <= 9) ? QStringLiteral("&%1  %2").arg(n).arg(disp) : disp;
+        QAction *a = m_recentMenu->addAction(label);
+        a->setToolTip(p);
+        connect(a, &QAction::triggered, this, [this, p] { openFolderPath(p); });
+    }
+    if (n == 0) {
+        QAction *none = m_recentMenu->addAction(tr("(no recent projects)"));
+        none->setEnabled(false);
+    } else {
+        m_recentMenu->addSeparator();
+        m_recentMenu->addAction(tr("&Clear recent projects"), this, [this] {
+            QSettings().remove("recentProjects");
+            rebuildRecentMenu();
+        });
+    }
+}
+
 void MainWindow::openFolderPath(const QString &path)
 {
+    addRecentProject(path);                  // remember it under File ▸ Recent projects
+
     // Switching to a different project root: its breakpoints no longer apply.
     if (!m_project.rootPath.isEmpty() &&
         QFileInfo(path).absoluteFilePath() != QFileInfo(m_project.rootPath).absoluteFilePath())

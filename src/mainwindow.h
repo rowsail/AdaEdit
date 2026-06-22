@@ -47,6 +47,8 @@ public:
 
     void openPath(const QString &path);
     void openFolderPath(const QString &path);
+    void addRecentProject(const QString &path);   // record in the MRU list
+    void rebuildRecentMenu();                      // repopulate File ▸ Recent projects
     void restoreLastFolder();
     void restoreSession();        // reopen last folder + files + active tab
     void ensureOpenTab();         // create an untitled tab if none are open
@@ -203,6 +205,7 @@ private:
     void clearDebugLine();
 
     QTabWidget *m_tabs = nullptr;
+    class QMenu *m_recentMenu = nullptr;   // File ▸ Recent projects
     QList<QDockWidget *> m_docks;         // all docks, for the View menu toggles
     QList<Command> m_commands;            // all rebindable commands (keyboard map)
     QComboBox *m_profileCombo = nullptr;  // Ada runtime profile selector
