@@ -21,7 +21,7 @@ public:
     ~LspClient() override;
 
     void start(const QString &serverPath, const QString &rootPath, const QString &projectFile,
-               const QStringList &gprProjectPath = {});
+               const QStringList &gprProjectPath = {}, const QString &rtsProfile = {});
     bool isRunning() const;
 
     void didOpen(const QString &path, const QString &text);

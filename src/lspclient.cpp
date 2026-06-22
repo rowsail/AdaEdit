@@ -43,20 +43,26 @@ QString LspClient::uriToPath(const QString &uri)
 }
 
 void LspClient::start(const QString &serverPath, const QString &rootPath, const QString &projectFile,
-                      const QStringList &gprProjectPath)
+                      const QStringList &gprProjectPath, const QString &rtsProfile)
 {
     m_proc = new QProcess(this);
     connect(m_proc, &QProcess::readyReadStandardOutput, this, &LspClient::onStdout);
     connect(m_proc, &QProcess::readyReadStandardError, this, &LspClient::onStderr);
-    // Give ALS GPR_PROJECT_PATH so a standalone project's by-name `with`s
-    // (with "esp32s3_rts.gpr"; with "esp32s3_hal.gpr";) resolve -- without it ALS
-    // can't load the project, so cross-reference (go-to-definition) fails.
-    if (!gprProjectPath.isEmpty()) {
+    // Environment ALS loads the project with:
+    //  - GPR_PROJECT_PATH so a standalone project's by-name `with`s resolve
+    //    (with "esp32s3_rts.gpr";) -- else ALS can't load it and xref fails;
+    //  - ESP32S3_RTS_PROFILE so the HAL includes the right sources (the
+    //    interrupt/handle drivers are Excluded_Source_Files under light-tasking,
+    //    so go-to-definition into them only works under embedded/full).
+    if (!gprProjectPath.isEmpty() || !rtsProfile.isEmpty()) {
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        QString combined = gprProjectPath.join(':');
-        const QString existing = env.value("GPR_PROJECT_PATH");
-        if (!existing.isEmpty()) combined += ':' + existing;
-        env.insert("GPR_PROJECT_PATH", combined);
+        if (!gprProjectPath.isEmpty()) {
+            QString combined = gprProjectPath.join(':');
+            const QString existing = env.value("GPR_PROJECT_PATH");
+            if (!existing.isEmpty()) combined += ':' + existing;
+            env.insert("GPR_PROJECT_PATH", combined);
+        }
+        if (!rtsProfile.isEmpty()) env.insert("ESP32S3_RTS_PROFILE", rtsProfile);
         m_proc->setProcessEnvironment(env);
     }
     m_proc->start(serverPath, QStringList{});

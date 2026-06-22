@@ -153,7 +153,9 @@ private:
     void refreshBreakpointsPane();
     void applyBreakpointMarkers(QsciScintilla *e);
     void ensureLsp(const QString &file);
+    void reopenInLsp();            // re-send didOpen for all open Ada files (after an ALS restart)
     QStringList gprProjectPathFor(const QString &file) const;   // SDK dirs for ALS GPR_PROJECT_PATH
+    QString effectiveProfile(const QString &file) const;        // toolbar profile, or the example's own
     void requestDefinition(QsciScintilla *e, int line, int index);
     void requestHover(QsciScintilla *e, int line, int index, const QPoint &anchorGlobal);
     void requestFormat(QsciScintilla *e);

@@ -937,6 +937,32 @@ void MainWindow::onProfileChanged(int)
     m_profile = m_profileCombo->currentData().toString();
     QSettings().setValue("buildProfile", m_profile);
     statusBar()->showMessage(tr("Build profile: %1").arg(m_profile), 3000);
+
+    // ALS's source set depends on the profile (the HAL excludes the interrupt /
+    // handle drivers under light-tasking), so restart it so navigation reflects
+    // the new choice, then re-register the open files.
+    if (m_lsp) {
+        if (QsciScintilla *e = currentEditor()) {
+            const QString p = editorPath(e);
+            if (isAdaFile(p)) {
+                m_lspRoot.clear();        // force ensureLsp to tear down + restart
+                ensureLsp(p);
+                reopenInLsp();
+            }
+        }
+    }
+}
+
+// Re-send didOpen for every open Ada file -- used after ALS is restarted (e.g. on
+// a profile change) so the fresh server knows about the buffers again.
+void MainWindow::reopenInLsp()
+{
+    if (!m_lsp) return;
+    for (int i = 0; i < m_tabs->count(); ++i)
+        if (auto *e = qobject_cast<QsciScintilla *>(m_tabs->widget(i))) {
+            const QString p = editorPath(e);
+            if (!p.isEmpty() && isAdaFile(p)) m_lsp->didOpen(p, e->text());
+        }
 }
 
 // Enumerate connected serial devices into the toolbar's Device selector. ESP32
@@ -1383,6 +1409,20 @@ void MainWindow::gotoLine()
 
 // ---- Language server (definition / hover) --------------------------------
 
+// The profile ALS should load with: the toolbar selection, or (for "auto") the
+// project's own as declared in its build script (default light-tasking).
+QString MainWindow::effectiveProfile(const QString &file) const
+{
+    if (!m_profile.isEmpty() && m_profile != "auto") return m_profile;
+    const QString repo = findRepoRoot(file);
+    const QString example = exampleOf(repo, file);
+    const QString exdir = (!example.isEmpty() && !repo.isEmpty())
+        ? QDir(repo).filePath("examples/" + example) : findProjectRoot(file);
+    QString prof = rtsProfileIn(QDir(exdir).filePath("build.sh"));
+    if (prof.isEmpty()) prof = rtsProfileIn(QDir(exdir).filePath("main/build_ada.sh"));
+    return prof.isEmpty() ? QStringLiteral("light-tasking") : prof;
+}
+
 // Directories to put on ALS's GPR_PROJECT_PATH so a standalone project's by-name
 // `with`s resolve: the SDK's crates/esp32s3_rts and every libs/<name>/.  Find the
 // SDK via the env the AppRun sets, the bundle, or the resolved repo root.
@@ -1444,7 +1484,7 @@ void MainWindow::ensureLsp(const QString &file)
     connect(m_lsp, &LspClient::applyEditRequested, this, &MainWindow::applyWorkspaceEdit);
     connect(m_lsp, &LspClient::ready, this,
             [this] { requestSemanticTokens(currentEditor()); });   // colour once ALS is up
-    m_lsp->start(als, root, gpr, gprProjectPathFor(file));
+    m_lsp->start(als, root, gpr, gprProjectPathFor(file), effectiveProfile(file));
 }
 
 void MainWindow::requestDefinition(QsciScintilla *e, int line, int index)
