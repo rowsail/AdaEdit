@@ -230,6 +230,7 @@ private:
     bool m_monitorAfterAction = false;   // open the serial monitor when this action succeeds
     Debugger *m_debugger = nullptr;
     LspClient *m_lsp = nullptr;
+    QString m_lspRoot;                    // project root ALS is currently serving
     class QTimer *m_semTimer = nullptr;   // debounce semantic-token refresh on edits
 
     // Debug current-line marker.

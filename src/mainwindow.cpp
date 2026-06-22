@@ -1385,15 +1385,30 @@ void MainWindow::gotoLine()
 
 void MainWindow::ensureLsp(const QString &file)
 {
-    if (m_lsp) return;                       // started once per session
-    const QString als = findAlsServer();
-    if (als.isEmpty()) {
-        statusBar()->showMessage(tr("ada_language_server not found — semantic features off"), 5000);
-        return;
-    }
     const QString gpr = findGpr(file);
     const QString root = gpr.isEmpty() ? QFileInfo(file).absolutePath()
                                        : QFileInfo(gpr).absolutePath();
+    if (m_lsp && root == m_lspRoot) return;     // ALS already serving this project
+
+    const QString als = findAlsServer();
+    if (als.isEmpty()) {
+        if (!m_lsp)
+            statusBar()->showMessage(tr("ada_language_server not found — semantic features off"), 5000);
+        return;
+    }
+
+    if (m_lsp) {
+        // Opening a different project: ALS is single-root, so restart it for the
+        // new project (otherwise hover/definition/diagnostics/highlighting stay
+        // pointed at the first project's .gpr).
+        disconnect(m_lsp, nullptr, this, nullptr);
+        m_lsp->deleteLater();
+        m_lsp = nullptr;
+        m_diagnostics.clear();                  // stale diagnostics from the old project
+        refreshProblems();
+    }
+
+    m_lspRoot = root;
     m_lsp = new LspClient(this);
     connect(m_lsp, &LspClient::log, this,
             [this](const QString &m) { statusBar()->showMessage(m, 3000); });
