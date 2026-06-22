@@ -125,6 +125,7 @@ private slots:
     void onEditorContextMenu(const QPoint &pos);
     void gotoDefinitionAtCursor();
     void renameSymbolAtCursor();   // refactor: rename the symbol under the cursor (F2)
+    void codeActionsAtCursor();    // refactor: list code actions at the cursor (Ctrl+.)
     void triggerCompletion();
     void onDiagnostics(const QString &path, const QVector<LspClient::Diagnostic> &diags);
     void onProblemActivated(QListWidgetItem *item);
@@ -159,6 +160,8 @@ private:
     void applyTextEdits(QsciScintilla *e, const QList<LspClient::TextEdit> &edits);
     void renameSymbol(QsciScintilla *e, int line, int index);   // LSP rename (refactor)
     void applyWorkspaceEdit(const LspClient::WorkspaceEdit &edits);
+    void requestCodeActions(QsciScintilla *e);                  // LSP code actions (refactor menu)
+    void applyCodeAction(const LspClient::CodeAction &action);
     void applyDiagnostics(QsciScintilla *e);
     void refreshProblems();
     void showHoverPopup(const QString &text, const QPoint &globalPos);

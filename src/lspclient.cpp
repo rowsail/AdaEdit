@@ -9,6 +9,10 @@
 #include <QRegularExpression>
 #include <QSet>
 
+// Defined further down; used by handleMessage (workspace/applyEdit) above them.
+static QList<LspClient::TextEdit> parseEdits(const QJsonValue &result);
+static LspClient::WorkspaceEdit parseWorkspaceEdit(const QJsonValue &result);
+
 LspClient::LspClient(QObject *parent) : QObject(parent) {}
 
 LspClient::~LspClient()
@@ -75,8 +79,20 @@ void LspClient::start(const QString &serverPath, const QString &rootPath, const 
     tdCaps["formatting"] = QJsonObject{{"dynamicRegistration", false}};
     tdCaps["rangeFormatting"] = QJsonObject{{"dynamicRegistration", false}};
     tdCaps["rename"] = QJsonObject{{"dynamicRegistration", false}, {"prepareSupport", false}};
+    tdCaps["codeAction"] = QJsonObject{
+        {"dynamicRegistration", false},
+        {"codeActionLiteralSupport", QJsonObject{{"codeActionKind", QJsonObject{
+            {"valueSet", QJsonArray{"quickfix", "refactor", "refactor.extract",
+                                    "refactor.inline", "refactor.rewrite", "source"}}}}}},
+    };
     QJsonObject caps;
     caps["textDocument"] = tdCaps;
+    // We can apply server-pushed edits and run server commands (command-based
+    // refactorings: executeCommand -> the server sends workspace/applyEdit back).
+    caps["workspace"] = QJsonObject{
+        {"applyEdit", true},
+        {"executeCommand", QJsonObject{{"dynamicRegistration", false}}},
+    };
 
     QJsonObject params;
     params["processId"] = double(QCoreApplication::applicationPid());
@@ -173,6 +189,15 @@ void LspClient::handleMessage(const QJsonObject &msg)
                 diags.push_back(d);
             }
             emit diagnosticsPublished(path, diags);
+            return;
+        }
+        if (method == "workspace/applyEdit") {
+            // The server (a command-based refactoring) asks us to apply an edit.
+            const QJsonObject edit = msg.value("params").toObject().value("edit").toObject();
+            emit applyEditRequested(parseWorkspaceEdit(edit));
+            if (msg.contains("id"))
+                writeMessage(QJsonObject{{"jsonrpc", "2.0"}, {"id", msg.value("id")},
+                                         {"result", QJsonObject{{"applied", true}}}});
             return;
         }
         // Other server-initiated requests need a reply so the server doesn't stall.
@@ -384,4 +409,47 @@ void LspClient::rename(const QString &path, int line, int character,
         if (edits.isEmpty()) { cb(edits, tr("no occurrences to rename")); return; }
         cb(edits, QString());
     });
+}
+
+void LspClient::codeAction(const QString &path, int startLine, int startChar,
+                           int endLine, int endChar,
+                           const QVector<Diagnostic> &diags, CodeActionCallback cb)
+{
+    QJsonArray diagArr;
+    for (const Diagnostic &d : diags)
+        diagArr.append(QJsonObject{
+            {"range", QJsonObject{{"start", position(d.startLine, d.startChar)},
+                                  {"end", position(d.endLine, d.endChar)}}},
+            {"severity", d.severity}, {"message", d.message}});
+
+    QJsonObject range{{"start", position(startLine, startChar)},
+                      {"end", position(endLine, endChar)}};
+    QJsonObject params{{"textDocument", docId(path)}, {"range", range},
+                       {"context", QJsonObject{{"diagnostics", diagArr}}}};
+    sendRequest("textDocument/codeAction", params, [cb](const QJsonValue &result) {
+        QList<CodeAction> actions;
+        for (const QJsonValue &v : result.toArray()) {
+            const QJsonObject o = v.toObject();
+            CodeAction a;
+            a.title = o.value("title").toString();
+            a.kind  = o.value("kind").toString();
+            if (o.contains("edit")) { a.hasEdit = true; a.edit = parseWorkspaceEdit(o.value("edit")); }
+            // Both CodeAction.command (an object) and the bare Command form (this
+            // object IS the command) are possible.
+            const QJsonValue cmd = o.contains("command") ? o.value("command") : v;
+            if (cmd.isObject() && cmd.toObject().contains("command")) {
+                a.command   = cmd.toObject().value("command").toString();
+                a.arguments = cmd.toObject().value("arguments").toArray();
+            }
+            if (!a.title.isEmpty()) actions.push_back(a);
+        }
+        cb(actions);
+    });
+}
+
+void LspClient::executeCommand(const QString &command, const QJsonArray &arguments)
+{
+    sendRequest("workspace/executeCommand",
+                QJsonObject{{"command", command}, {"arguments", arguments}},
+                [](const QJsonValue &) {});   // effect arrives via workspace/applyEdit
 }

@@ -441,6 +441,8 @@ void MainWindow::createMenus()
                 "edit.format", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
     registerCmd(edit->addAction(tr("Re&name symbol..."), this, &MainWindow::renameSymbolAtCursor),
                 "edit.rename", QKeySequence(Qt::Key_F2));
+    registerCmd(edit->addAction(tr("Code &actions..."), this, &MainWindow::codeActionsAtCursor),
+                "edit.codeActions", QKeySequence(Qt::CTRL | Qt::Key_Period));
 
     // View: one checkable entry per dock. QDockWidget::toggleViewAction() is
     // already checkable, shows/hides the dock, and unticks itself when the dock
@@ -1326,6 +1328,7 @@ void MainWindow::ensureLsp(const QString &file)
     connect(m_lsp, &LspClient::log, this,
             [this](const QString &m) { statusBar()->showMessage(m, 3000); });
     connect(m_lsp, &LspClient::diagnosticsPublished, this, &MainWindow::onDiagnostics);
+    connect(m_lsp, &LspClient::applyEditRequested, this, &MainWindow::applyWorkspaceEdit);
     m_lsp->start(als, root, gpr);
 }
 
@@ -1568,6 +1571,62 @@ void MainWindow::applyWorkspaceEdit(const LspClient::WorkspaceEdit &edits)
     statusBar()->showMessage(
         tr("Renamed %n occurrence(s) in %1 file(s) — review and Save All", "", count).arg(files),
         6000);
+}
+
+void MainWindow::codeActionsAtCursor()
+{
+    if (QsciScintilla *e = currentEditor()) requestCodeActions(e);
+}
+
+// Refactor: ask the language server for ALL code actions (refactorings + quick
+// fixes) available at the cursor/selection, then present them in a popup menu.
+void MainWindow::requestCodeActions(QsciScintilla *e)
+{
+    if (!m_lsp || !m_lsp->isRunning()) {
+        statusBar()->showMessage(tr("Language server not available"), 3000);
+        return;
+    }
+    const QString path = editorPath(e);
+    if (path.isEmpty()) { statusBar()->showMessage(tr("Save the file first"), 4000); return; }
+
+    int sl, sc, el, ec;
+    if (e->hasSelectedText()) {
+        e->getSelection(&sl, &sc, &el, &ec);
+    } else {
+        e->getCursorPosition(&sl, &sc);            // empty range at the cursor
+        el = sl; ec = sc;
+    }
+    // Diagnostics overlapping the range give the server context for quick-fixes.
+    QVector<LspClient::Diagnostic> ctxDiags;
+    for (const auto &d : m_diagnostics.value(path))
+        if (!(d.endLine < sl || d.startLine > el)) ctxDiags.push_back(d);
+
+    m_lsp->didChange(path, e->text());
+    m_lsp->codeAction(path, sl, sc, el, ec, ctxDiags,
+                      [this](const QList<LspClient::CodeAction> &actions) {
+        if (actions.isEmpty()) { statusBar()->showMessage(tr("No refactorings available here"), 3000); return; }
+        QMenu menu;
+        menu.setTitle(tr("Refactor"));
+        QHash<QAction *, LspClient::CodeAction> map;
+        for (const LspClient::CodeAction &a : actions) {
+            QAction *act = menu.addAction(a.title);
+            map.insert(act, a);
+        }
+        QAction *chosen = menu.exec(QCursor::pos());
+        if (chosen && map.contains(chosen)) applyCodeAction(map.value(chosen));
+    });
+}
+
+void MainWindow::applyCodeAction(const LspClient::CodeAction &action)
+{
+    // Prefer an inline edit; otherwise run the command (its edit returns async via
+    // the server's workspace/applyEdit -> applyWorkspaceEdit).
+    if (action.hasEdit && !action.edit.isEmpty())
+        applyWorkspaceEdit(action.edit);
+    else if (!action.command.isEmpty())
+        m_lsp->executeCommand(action.command, action.arguments);
+    else
+        statusBar()->showMessage(tr("'%1' produced no changes").arg(action.title), 3000);
 }
 
 void MainWindow::triggerCompletion()
@@ -2065,6 +2124,7 @@ void MainWindow::onEditorContextMenu(const QPoint &pos)
     QMenu *refactor = menu.addMenu(tr("Refactor"));
     refactor->setEnabled(ada);
     QAction *ren = refactor->addAction(tr("Rename symbol…"));
+    QAction *acts = refactor->addAction(tr("Code actions…"));
     menu.addSeparator();
     QAction *bp = menu.addAction(has ? tr("Clear breakpoint") : tr("Set breakpoint"));
     menu.addSeparator();
@@ -2083,6 +2143,7 @@ void MainWindow::onEditorContextMenu(const QPoint &pos)
     else if (chosen == hov)   requestHover(e, defLine, defIndex, e->mapToGlobal(pos));
     else if (chosen == fmt)   requestFormat(e);
     else if (chosen == ren)   renameSymbol(e, defLine, defIndex);
+    else if (chosen == acts)  requestCodeActions(e);
     else if (chosen == bp)    toggleBreakpoint(e, line);
     else if (chosen == cut)   e->cut();
     else if (chosen == copy)  e->copy();

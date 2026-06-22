@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QJsonArray>
 #include <functional>
 
 class QProcess;
@@ -39,11 +40,24 @@ public:
     // A WorkspaceEdit: edits grouped by document URI (rename spans many files).
     using WorkspaceEdit = QHash<QString, QList<TextEdit>>;
 
+    // A textDocument/codeAction result entry (a refactoring or quick-fix). It
+    // carries either an inline `edit` to apply, or a `command` to execute (the
+    // server then sends workspace/applyEdit), or both.
+    struct CodeAction {
+        QString title;
+        QString kind;
+        bool hasEdit = false;
+        WorkspaceEdit edit;
+        QString command;            // command id, if any
+        QJsonArray arguments;       // command arguments
+    };
+
     using DefCallback = std::function<void(const QString &uri, int line, int character)>;
     using HoverCallback = std::function<void(const QString &text)>;
     using CompletionCallback = std::function<void(const QStringList &items)>;
     using FormatCallback = std::function<void(const QList<TextEdit> &edits)>;
     using RenameCallback = std::function<void(const WorkspaceEdit &edits, const QString &error)>;
+    using CodeActionCallback = std::function<void(const QList<CodeAction> &actions)>;
     void definition(const QString &path, int line, int character, DefCallback cb);
     void hover(const QString &path, int line, int character, HoverCallback cb);
     void completion(const QString &path, int line, int character, CompletionCallback cb);
@@ -53,6 +67,10 @@ public:
                          FormatCallback cb);
     void rename(const QString &path, int line, int character,
                 const QString &newName, RenameCallback cb);
+    void codeAction(const QString &path, int startLine, int startChar,
+                    int endLine, int endChar,
+                    const QVector<Diagnostic> &diags, CodeActionCallback cb);
+    void executeCommand(const QString &command, const QJsonArray &arguments);
 
     static QString pathToUri(const QString &path);
     static QString uriToPath(const QString &uri);
@@ -61,6 +79,9 @@ signals:
     void ready();
     void log(const QString &message);
     void diagnosticsPublished(const QString &path, const QVector<LspClient::Diagnostic> &diags);
+    // The server asked us to apply an edit (workspace/applyEdit) -- e.g. the result
+    // of a command-based refactoring kicked off by executeCommand().
+    void applyEditRequested(const LspClient::WorkspaceEdit &edits);
 
 private slots:
     void onStdout();
