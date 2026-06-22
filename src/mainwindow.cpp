@@ -409,14 +409,20 @@ void MainWindow::createMenus()
                 "file.new", QKeySequence::New);
     registerCmd(file->addAction(tr("&Open file..."), this, &MainWindow::openFile),
                 "file.openFile", QKeySequence::Open);
-    registerCmd(file->addAction(tr("Open &folder..."), this, &MainWindow::openFolder),
-                "file.openFolder", QKeySequence(Qt::CTRL | Qt::Key_K, Qt::CTRL | Qt::Key_O));
     registerCmd(file->addAction(tr("&Save"), this, &MainWindow::saveFile),
                 "file.save", QKeySequence::Save);
     registerCmd(file->addAction(tr("Save &as..."), this, &MainWindow::saveFileAs),
                 "file.saveAs", QKeySequence::SaveAs);
     registerCmd(file->addAction(tr("Save A&ll"), this, &MainWindow::saveAll),
                 "file.saveAll", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S));
+    file->addSeparator();
+    // A project IS a folder; "Open project" opens one (replaces the old Open folder).
+    registerCmd(file->addAction(tr("New &project..."), this, &MainWindow::newProject),
+                "project.new");
+    registerCmd(file->addAction(tr("Open pro&ject..."), this, &MainWindow::openProject),
+                "project.open", QKeySequence(Qt::CTRL | Qt::Key_K, Qt::CTRL | Qt::Key_O));
+    registerCmd(file->addAction(tr("Save project as... (&duplicate)"), this, &MainWindow::saveProjectAs),
+                "project.saveAs");
     file->addSeparator();
     registerCmd(file->addAction(tr("Se&ttings..."), this, &MainWindow::openSettings),
                 "file.settings");
@@ -475,11 +481,6 @@ void MainWindow::createMenus()
                 "search.gotoDefinition", QKeySequence(Qt::Key_F12));
     registerCmd(search->addAction(tr("&Complete"), this, &MainWindow::triggerCompletion),
                 "search.complete", QKeySequence(Qt::CTRL | Qt::Key_Space));
-
-    QMenu *project = menuBar()->addMenu(tr("&Project"));
-    registerCmd(project->addAction(tr("&New project..."), this, &MainWindow::newProject), "project.new");
-    registerCmd(project->addAction(tr("&Open project..."), this, &MainWindow::openProject), "project.open");
-    registerCmd(project->addAction(tr("Save project &as... (duplicate)"), this, &MainWindow::saveProjectAs), "project.saveAs");
 
     QMenu *build = menuBar()->addMenu(tr("&Build"));
     registerCmd(build->addAction(tr("&Build"), this, &MainWindow::doBuild),
