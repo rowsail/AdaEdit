@@ -125,6 +125,26 @@ bundled SDK fixes into it automatically. It includes:
 (Building from source instead of the AppImage? Point the editor at a checkout of
 the [`ada_esp32s3`](https://github.com/rowsail/ada_esp32s3) SDK — the same tree.)
 
+### New device drivers (SDK v0.1.2) — tested on hardware
+
+The latest SDK adds five peripheral drivers, each with a worked example that was
+run on real hardware (every example's `README.md` captures the actual serial
+output from a board). On the test setup the four I2C parts share **one bus**
+(`SDA = IO8`, `SCL = IO7`), demonstrating the HAL's per-device + per-host locking.
+
+| Driver | Device | Bus / addr | What was exercised on hardware |
+|---|---|---|---|
+| `ESP32S3.TCA9555` | TI 16-bit I2C GPIO expander | I2C `0x20` | probe (present); both output-port registers written + read back (PASS); per-pin set/clear; polarity register. INT line not wired. |
+| `ESP32S3.SHT41` | Sensirion SHT41-AD1B temp/humidity | I2C `0x44` | detected at `0x44`; temperature + humidity read from a live sensor sharing the bus with the RTC/IMU. |
+| `ESP32S3.QMI8658C` | QST 6-axis IMU (accel + gyro) | I2C `0x6B` | `WHO_AM_I = 0x05` confirmed; accelerometer + gyroscope sampled. Raw scaling is subject to QST's board-level calibration; INT polled (not wired). |
+| `ESP32S3.PCF85063A` | NXP real-time clock | I2C `0x51` | detected at `0x51`; set/get time and a seconds-match alarm driven on a live chip. INT not wired on the test board. |
+| `ESP32S3.GPS` (+ `.NMEA`, `.L76K`) | NMEA-0183 GPS receiver | UART | NMEA sentences parsed from a live L76K module; `PCAS04` constellation-select **tested**. `PCAS01` baud-rate command is coded but **untested**. |
+
+These join the existing `ESP32S3.*` HAL. As above, the HAL is still under
+development: the interrupt paths are largely coded-but-unwired on the test boards,
+and some device features (IMU calibration, GPS baud configuration) aren't yet
+exercised — see each example's README for the exact tested behaviour and caveats.
+
 ## Serial monitor
 
 A native **Serial monitor** dock backed by Qt's `QSerialPort` — no external
