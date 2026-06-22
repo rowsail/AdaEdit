@@ -91,7 +91,6 @@ private slots:
     // Project
     void newProject();
     void openProject();
-    bool saveProject();
     bool saveProjectAs();
     void onProfileChanged(int index);
     void populatePorts();          // (re)enumerate connected serial devices

@@ -2,6 +2,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QSettings>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -45,6 +46,7 @@ Project Project::makeDefault()
     esp.gdbProgram         = "{root}/app.elf";
     esp.gdbRemote          = "localhost:3333";
     esp.initBreakpoint     = "app_main";
+    esp.debugSmp           = QSettings().value("debugSmp", false).toBool();
 
     // This editor targets the ESP32-S3 only; a single fixed profile.
     p.targets = { esp };
@@ -76,6 +78,7 @@ Project Project::makeStandalone(const QString &rootPath)
     esp.gdbProgram     = "{root}/app.elf";
     esp.gdbRemote      = "localhost:3333";
     esp.initBreakpoint = "app_main";
+    esp.debugSmp       = QSettings().value("debugSmp", false).toBool();
 
     p.targets = { esp };
     p.activeIndex = 0;

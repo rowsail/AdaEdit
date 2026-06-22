@@ -477,10 +477,9 @@ void MainWindow::createMenus()
                 "search.complete", QKeySequence(Qt::CTRL | Qt::Key_Space));
 
     QMenu *project = menuBar()->addMenu(tr("&Project"));
-    registerCmd(project->addAction(tr("&New project"), this, &MainWindow::newProject), "project.new");
+    registerCmd(project->addAction(tr("&New project..."), this, &MainWindow::newProject), "project.new");
     registerCmd(project->addAction(tr("&Open project..."), this, &MainWindow::openProject), "project.open");
-    registerCmd(project->addAction(tr("&Save project"), this, &MainWindow::saveProject), "project.save");
-    registerCmd(project->addAction(tr("Save project &as..."), this, &MainWindow::saveProjectAs), "project.saveAs");
+    registerCmd(project->addAction(tr("Save project &as... (duplicate)"), this, &MainWindow::saveProjectAs), "project.saveAs");
 
     QMenu *build = menuBar()->addMenu(tr("&Build"));
     registerCmd(build->addAction(tr("&Build"), this, &MainWindow::doBuild),
@@ -1045,30 +1044,21 @@ void MainWindow::openFolderPath(const QString &path)
 
     m_tree->setRootIndex(m_fsModel->setRootPath(path));
 
-    // An explicit .adaproj wins.  Otherwise pick the command set that matches the
-    // folder, rather than keeping whatever project happened to be open:
-    //   - a folder under <repo>/examples/  -> in-tree example (./x {example}),
+    // The folder IS the project: derive its commands from its structure.
+    //   - <repo>/examples/<name> (repo holds ./x) -> in-tree example (./x {example})
     //   - else a standalone project (app.gpr + build.sh from `esp32-ada init`)
-    //     -> esp32-ada -C {root},
-    //   - else a neutral default.
-    const QString proj = QDir(path).filePath(".adaproj");
-    if (QFileInfo::exists(proj)) {
-        QString err;
-        if (m_project.load(proj, &err))
-            statusBar()->showMessage(tr("Loaded project %1").arg(proj), 3000);
-    } else {
-        // In-tree example: <repo>/examples/<name> where <repo> holds the ./x launcher.
-        QDir up(path);
-        bool isExample = false;
-        if (up.cdUp() && up.dirName() == "examples" && up.cdUp())
-            isExample = isRepoRoot(up);
-        const bool isStandalone =
-            QFileInfo::exists(QDir(path).filePath("app.gpr")) &&
-            QFileInfo::exists(QDir(path).filePath("build.sh"));
-        m_project = (!isExample && isStandalone) ? Project::makeStandalone(path)
-                                                 : Project::makeDefault();
-    }
-    m_project.rootPath = path;             // load()/makeDefault() don't set rootPath
+    //     -> esp32-ada -C {root}
+    //   - else a neutral default
+    QDir up(path);
+    bool isExample = false;
+    if (up.cdUp() && up.dirName() == "examples" && up.cdUp())
+        isExample = isRepoRoot(up);
+    const bool isStandalone =
+        QFileInfo::exists(QDir(path).filePath("app.gpr")) &&
+        QFileInfo::exists(QDir(path).filePath("build.sh"));
+    m_project = (!isExample && isStandalone) ? Project::makeStandalone(path)
+                                             : Project::makeDefault();
+    m_project.rootPath = path;             // makeDefault() doesn't set rootPath
     updateTitle();
     updateDebugActions();
     setWindowFilePath(path);
@@ -1800,74 +1790,78 @@ void MainWindow::newProject()
         }
     }
 
-    // Adopt a standalone project (esp32-ada-driven commands), persist it, open it.
-    m_project = Project::makeStandalone(dir);
-    QString err;
-    m_project.save(QDir(dir).filePath(".adaproj"), &err);
-    openFolderPath(dir);                              // sets tree root + reloads .adaproj
+    // The folder IS the project -- just open it.  openFolderPath derives the
+    // commands from its structure (a scaffolded folder has app.gpr + build.sh ->
+    // standalone) and updates the title/debug actions.
+    openFolderPath(dir);
     const QString main = QDir(dir).filePath("src/main.adb");
     if (QFileInfo::exists(main)) openOrActivate(main);
-    updateTitle();
-    updateDebugActions();
     statusBar()->showMessage(tr("New project at %1").arg(dir), 4000);
 }
 
-void MainWindow::openProject()
-{
-    const QString path = QFileDialog::getOpenFileName(
-        this, tr("Open project"), m_project.rootPath, tr("AdaEdit project (*.adaproj)"));
-    if (path.isEmpty()) return;
-    QString err;
-    if (!m_project.load(path, &err)) {
-        QMessageBox::warning(this, tr("Open project"),
-                             tr("Cannot open %1:\n%2").arg(path, err));
-        return;
-    }
-    // The project lives where its file does (rootPath isn't serialized, and
-    // load() leaves the previous project's rootPath untouched -- so set it here).
-    const QString newRoot = QFileInfo(path).absolutePath();
-    if (!m_project.rootPath.isEmpty() &&
-        QFileInfo(newRoot).absoluteFilePath() != QFileInfo(m_project.rootPath).absoluteFilePath())
-        clearAllBreakpoints();
-    m_project.rootPath = newRoot;
-    m_tree->setRootIndex(m_fsModel->setRootPath(m_project.rootPath));   // repoint explorer
-    const QString main = QDir(m_project.rootPath).filePath("src/main.adb");
-    if (QFileInfo::exists(main)) openOrActivate(main);
-    updateTitle();
-    updateDebugActions();
-    statusBar()->showMessage(tr("Opened %1").arg(path), 3000);
-}
+// A project IS its folder, so "Open project" is just "Open folder".
+void MainWindow::openProject() { openFolder(); }
 
-bool MainWindow::saveProject()
+// Recursively copy a project tree, skipping build outputs so the duplicate is a
+// clean, rebuildable source tree (sources only).
+static bool copyProjectTree(const QString &src, const QString &dst, QString *err)
 {
-    QString target = m_project.filePath;
-    if (target.isEmpty() && !m_project.rootPath.isEmpty())
-        target = QDir(m_project.rootPath).filePath(".adaproj");
-    if (target.isEmpty())
-        return saveProjectAs();
-    QString err;
-    if (!m_project.save(target, &err)) {
-        QMessageBox::warning(this, tr("Save project"), err);
-        return false;
+    static const QStringList skipDirs  = {"obj", ".noidf", ".git"};
+    static const QStringList skipFiles = {"app.elf", "app.bin", "app.map"};
+    QDir().mkpath(dst);
+    const auto entries = QDir(src).entryInfoList(
+        QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden);
+    for (const QFileInfo &fi : entries) {
+        const QString name = fi.fileName();
+        const QString out = QDir(dst).filePath(name);
+        if (fi.isDir()) {
+            if (skipDirs.contains(name)) continue;
+            if (!copyProjectTree(fi.absoluteFilePath(), out, err)) return false;
+        } else {
+            if (skipFiles.contains(name) || name.endsWith(QLatin1String(".o"))) continue;
+            QFile::remove(out);
+            if (!QFile::copy(fi.absoluteFilePath(), out)) {
+                if (err) *err = QObject::tr("couldn't copy %1").arg(name);
+                return false;
+            }
+        }
     }
-    statusBar()->showMessage(tr("Project saved to %1").arg(target), 3000);
     return true;
 }
 
+// "Save project as": replicate the current project into a different (possibly
+// new) folder -- sources only -- then switch to the copy.
 bool MainWindow::saveProjectAs()
 {
-    QString path = QFileDialog::getSaveFileName(
-        this, tr("Save project as"),
-        m_project.rootPath.isEmpty() ? m_project.filePath : m_project.rootPath,
-        tr("AdaEdit project (*.adaproj)"));
-    if (path.isEmpty()) return false;
-    if (!path.endsWith(".adaproj")) path += ".adaproj";
-    QString err;
-    if (!m_project.save(path, &err)) {
-        QMessageBox::warning(this, tr("Save project"), err);
+    if (m_project.rootPath.isEmpty()) {
+        QMessageBox::information(this, tr("Save project as"),
+                                 tr("Open or create a project first."));
         return false;
     }
-    statusBar()->showMessage(tr("Project saved to %1").arg(path), 3000);
+    const QString src = m_project.rootPath;
+    const QString dst = QFileDialog::getExistingDirectory(
+        this, tr("Save project as — choose or create a destination folder"),
+        QFileInfo(src).absolutePath(), QFileDialog::ShowDirsOnly);
+    if (dst.isEmpty()) return false;
+    if (QFileInfo(dst).absoluteFilePath() == QFileInfo(src).absoluteFilePath()) {
+        QMessageBox::warning(this, tr("Save project as"), tr("That's the same folder."));
+        return false;
+    }
+    if (QFileInfo::exists(QDir(dst).filePath("app.gpr"))) {
+        QMessageBox::warning(this, tr("Save project as"),
+                             tr("%1 already contains a project (app.gpr).").arg(dst));
+        return false;
+    }
+    saveAll();                               // copy the latest edits, not stale files
+    QString err;
+    if (!copyProjectTree(src, dst, &err)) {
+        QMessageBox::warning(this, tr("Save project as"), tr("Copy failed: %1").arg(err));
+        return false;
+    }
+    openFolderPath(dst);                      // switch to the duplicate
+    const QString main = QDir(dst).filePath("src/main.adb");
+    if (QFileInfo::exists(main)) openOrActivate(main);
+    statusBar()->showMessage(tr("Project duplicated to %1").arg(dst), 5000);
     return true;
 }
 
@@ -2421,7 +2415,7 @@ void MainWindow::onSmpToggled(bool on)
     if (m_project.activeIndex < 0 || m_project.activeIndex >= m_project.targets.size())
         return;
     m_project.targets[m_project.activeIndex].debugSmp = on;
-    m_project.dirty = true;
+    QSettings().setValue("debugSmp", on);    // global (no per-project file anymore)
     if (m_debugger->isActive())
         statusBar()->showMessage(tr("Dual-core (SMP) applies on next Start debugging"), 4000);
     else
