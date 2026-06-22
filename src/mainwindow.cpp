@@ -955,17 +955,32 @@ void MainWindow::openFolder()
 
 void MainWindow::openFolderPath(const QString &path)
 {
-    m_project.rootPath = path;
     m_tree->setRootIndex(m_fsModel->setRootPath(path));
 
-    // Load a project file from the folder if present.
+    // An explicit .adaproj wins.  Otherwise pick the command set that matches the
+    // folder, rather than keeping whatever project happened to be open:
+    //   - a folder under <repo>/examples/  -> in-tree example (./x {example}),
+    //   - else a standalone project (app.gpr + build.sh from `esp32-ada init`)
+    //     -> esp32-ada -C {root},
+    //   - else a neutral default.
     const QString proj = QDir(path).filePath(".adaproj");
     if (QFileInfo::exists(proj)) {
         QString err;
         if (m_project.load(proj, &err))
             statusBar()->showMessage(tr("Loaded project %1").arg(proj), 3000);
+    } else {
+        // In-tree example: <repo>/examples/<name> where <repo> holds the ./x launcher.
+        QDir up(path);
+        bool isExample = false;
+        if (up.cdUp() && up.dirName() == "examples" && up.cdUp())
+            isExample = isRepoRoot(up);
+        const bool isStandalone =
+            QFileInfo::exists(QDir(path).filePath("app.gpr")) &&
+            QFileInfo::exists(QDir(path).filePath("build.sh"));
+        m_project = (!isExample && isStandalone) ? Project::makeStandalone(path)
+                                                 : Project::makeDefault();
     }
-    m_project.rootPath = path;             // load() doesn't set rootPath
+    m_project.rootPath = path;             // load()/makeDefault() don't set rootPath
     updateTitle();
     updateDebugActions();
     setWindowFilePath(path);
