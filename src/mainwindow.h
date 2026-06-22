@@ -94,6 +94,8 @@ private slots:
     bool saveProject();
     bool saveProjectAs();
     void onProfileChanged(int index);
+    void populatePorts();          // (re)enumerate connected serial devices
+    void onPortChanged(int index); // selected device -> $ESPPORT for child processes
 
     // Actions (ESP32-S3 target)
     void doBuild();
@@ -193,6 +195,8 @@ private:
     QList<Command> m_commands;            // all rebindable commands (keyboard map)
     QComboBox *m_profileCombo = nullptr;  // Ada runtime profile selector
     QString m_profile;                    // selected profile -> ./x --profile {profile}
+    QComboBox *m_portCombo = nullptr;     // target serial device (multi-board)
+    QString m_port;                       // selected /dev/tty* -> $ESPPORT (flash/debug/monitor)
     QPlainTextEdit *m_output = nullptr;
     // (no target picker: this editor is ESP32-S3-only)
     QPlainTextEdit *m_debugConsole = nullptr;

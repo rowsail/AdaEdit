@@ -3,6 +3,7 @@
 #include "debugger.h"
 #include "lspclient.h"
 #include "serialmonitor.h"
+#include <QtSerialPort/QSerialPortInfo>
 
 #include <Qsci/qsciscintilla.h>
 
@@ -842,6 +843,22 @@ void MainWindow::createActionBar()
     bar->addWidget(m_profileCombo);
     bar->addSeparator();
 
+    // Target device: which board to flash / debug / monitor when several are
+    // plugged in.  Exported as $ESPPORT, which the SDK's flash/openocd/monitor all
+    // honor (openocd.sh maps the tty -> the board's USB-JTAG serial and pins it).
+    bar->addWidget(new QLabel(tr("Device: "), bar));
+    m_portCombo = new QComboBox(bar);
+    m_portCombo->setToolTip(tr("Serial device for flash/debug/monitor ($ESPPORT)"));
+    m_portCombo->setMinimumContentsLength(16);
+    connect(m_portCombo, qOverload<int>(&QComboBox::activated),
+            this, &MainWindow::onPortChanged);
+    bar->addWidget(m_portCombo);
+    auto *rescan = bar->addAction(tr("⟳"), this, &MainWindow::populatePorts);
+    rescan->setToolTip(tr("Rescan connected devices"));
+    m_port = QSettings().value("espPort").toString();
+    populatePorts();
+    bar->addSeparator();
+
     bar->addAction(tr("Build"), this, &MainWindow::doBuild);
     bar->addAction(tr("Flash"), this, &MainWindow::doFlash);
     bar->addAction(tr("Run"), this, &MainWindow::doRun);
@@ -855,6 +872,46 @@ void MainWindow::onProfileChanged(int)
     m_profile = m_profileCombo->currentData().toString();
     QSettings().setValue("buildProfile", m_profile);
     statusBar()->showMessage(tr("Build profile: %1").arg(m_profile), 3000);
+}
+
+// Enumerate connected serial devices into the toolbar's Device selector. ESP32
+// boards (Espressif USB-JTAG 0x303a, or CP210x/CH340/FTDI bridges) are labelled
+// with their serial so two identical boards are distinguishable.  "Auto" leaves
+// $ESPPORT unset (SDK default /dev/ttyACM0).  Selection is preserved if still present.
+void MainWindow::populatePorts()
+{
+    if (!m_portCombo) return;
+    const QString want = m_port;
+    m_portCombo->clear();
+    m_portCombo->addItem(tr("Auto (default ttyACM0)"), QString());
+    for (const QSerialPortInfo &p : QSerialPortInfo::availablePorts()) {
+        const QString name = p.portName();
+        // USB serial devices only -- skip legacy on-board UARTs (ttyS*).
+        if (!(name.startsWith("ttyACM") || name.startsWith("ttyUSB")
+              || name.contains("usb", Qt::CaseInsensitive)))
+            continue;
+        const QString dev = p.systemLocation();            // /dev/ttyACM0
+        QString label = name;
+        if (!p.description().isEmpty()) label += " — " + p.description();
+        if (!p.serialNumber().isEmpty()) label += " [" + p.serialNumber() + "]";
+        m_portCombo->addItem(label, dev);
+    }
+    int idx = want.isEmpty() ? 0 : m_portCombo->findData(want);
+    if (idx < 0) idx = 0;                                   // remembered board gone -> Auto
+    m_portCombo->setCurrentIndex(idx);
+    onPortChanged(idx);
+}
+
+void MainWindow::onPortChanged(int)
+{
+    m_port = m_portCombo->currentData().toString();
+    // Child processes (x flash / openocd.sh / monitor) inherit our environment,
+    // so exporting $ESPPORT here steers all of them to the chosen board at once.
+    if (m_port.isEmpty()) qunsetenv("ESPPORT");
+    else                  qputenv("ESPPORT", m_port.toLocal8Bit());
+    QSettings().setValue("espPort", m_port);
+    if (!m_port.isEmpty())
+        statusBar()->showMessage(tr("Target device: %1").arg(m_port), 3000);
 }
 
 // Grep a shell script for an `ESP32S3_RTS_PROFILE=<value>` assignment, mirroring
