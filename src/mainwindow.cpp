@@ -1972,12 +1972,21 @@ QString MainWindow::sdkTool(const QString &rel) const
 
 void MainWindow::newProject()
 {
-    // Pick (or create, via the dialog's "New Folder" button) the project folder.
+    // Type a name for the new project folder (created if it doesn't exist) -- a
+    // save-style dialog accepts a typed, not-yet-existing path, unlike
+    // getExistingDirectory which forces "New Folder" then select.
     const QString start = m_project.rootPath.isEmpty() ? QDir::homePath() : m_project.rootPath;
-    const QString dir = QFileDialog::getExistingDirectory(
-        this, tr("New project — choose or create a folder"), start,
-        QFileDialog::ShowDirsOnly);
+    QString dir = QFileDialog::getSaveFileName(
+        this, tr("New project — enter a folder name"), start, QString(), nullptr,
+        QFileDialog::ShowDirsOnly | QFileDialog::DontConfirmOverwrite);
     if (dir.isEmpty()) return;                       // cancelled
+    dir = QDir::cleanPath(dir);
+
+    if (!QDir(dir).exists() && !QDir().mkpath(dir)) {
+        QMessageBox::warning(this, tr("New project"),
+                             tr("Couldn't create the folder:\n%1").arg(dir));
+        return;
+    }
 
     const QString gpr = QDir(dir).filePath("app.gpr");
     if (QFileInfo::exists(gpr)) {
