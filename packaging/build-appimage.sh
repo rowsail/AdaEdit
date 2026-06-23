@@ -33,6 +33,17 @@ echo "== assemble AppDir ($BUNDLE) =="
 rm -rf "$APPDIR"; mkdir -p "$APPDIR/usr/bin"
 cp "$ROOT/build-rel/adaedit" "$APPDIR/usr/bin/"
 
+# Icon at every size + a scalable SVG in the AppDir's hicolor theme, so desktop
+# integration gives KDE/GNOME the right size for BOTH the title bar (small, e.g.
+# 22px) and the taskbar (StartupWMClass=adaedit in the .desktop maps the window).
+for png in "$ROOT"/resources/icons/adaedit-*.png; do
+    s="$(basename "$png" | sed 's/adaedit-//; s/\.png//')"
+    d="$APPDIR/usr/share/icons/hicolor/${s}x${s}/apps"
+    mkdir -p "$d" && cp "$png" "$d/adaedit.png"
+done
+mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
+cp "$ROOT/resources/adaedit-square.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/adaedit.svg"
+
 if [ "$BUNDLE" = full ]; then
     # shellcheck disable=SC1091
     . "$HERE/manifest.env"

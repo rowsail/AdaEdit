@@ -1,8 +1,10 @@
 <!DOCTYPE RCC><RCC version="1.0">
   <qresource prefix="/">
     <file>icons/adaedit-16.png</file>
+    <file>icons/adaedit-22.png</file>
     <file>icons/adaedit-24.png</file>
     <file>icons/adaedit-32.png</file>
+    <file>icons/adaedit-36.png</file>
     <file>icons/adaedit-48.png</file>
     <file>icons/adaedit-64.png</file>
     <file>icons/adaedit-128.png</file>
