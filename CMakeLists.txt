@@ -54,6 +54,7 @@ add_executable(adaedit
     src/debugger.cpp
     src/lspclient.cpp
     src/serialmonitor.cpp
+    resources/adaedit.qrc
 )
 
 target_include_directories(adaedit PRIVATE ${QSCINTILLA_INCLUDE_DIR})

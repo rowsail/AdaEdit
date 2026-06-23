@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <QApplication>
 #include <QFileInfo>
+#include <QIcon>
 
 int main(int argc, char *argv[])
 {
@@ -8,6 +9,15 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName("AdaEdit");
     QApplication::setApplicationName("AdaEdit");
     QApplication::setApplicationVersion("0.1.0");
+
+    // Window icon (title bar + the running window's taskbar entry / Alt-Tab), with
+    // every size so each context renders crisply.  setDesktopFileName ties the
+    // window to adaedit.desktop so Wayland taskbars use the same icon/grouping.
+    QIcon icon;
+    for (int s : {16, 24, 32, 48, 64, 128, 256, 512})
+        icon.addFile(QStringLiteral(":/icons/adaedit-%1.png").arg(s));
+    QApplication::setWindowIcon(icon);
+    QGuiApplication::setDesktopFileName(QStringLiteral("adaedit"));
 
     MainWindow w;
     // A directory argument opens the project folder; files open in tabs.
