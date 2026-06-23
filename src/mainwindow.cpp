@@ -1268,7 +1268,7 @@ bool MainWindow::closeTab(int index)
     if (e == m_markerEditor) { m_markerEditor = nullptr; m_markerHandle = -1; }
     m_tabs->removeTab(index);
     delete e;
-    if (m_tabs->count() == 0) newFile();
+    if (m_tabs->count() == 0) updateTitle();   // empty editor area is fine; refresh the title
     return true;
 }
 
@@ -1384,11 +1384,6 @@ void MainWindow::restoreSession()
     if (!active.isEmpty())
         if (QsciScintilla *e = editorForPath(active))
             m_tabs->setCurrentWidget(e);
-}
-
-void MainWindow::ensureOpenTab()
-{
-    if (m_tabs->count() == 0) newFile();
 }
 
 // ---- Edit ----------------------------------------------------------------

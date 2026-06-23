@@ -51,7 +51,6 @@ public:
     void rebuildRecentMenu();                      // repopulate File ▸ Recent projects
     void restoreLastFolder();
     void restoreSession();        // reopen last folder + files + active tab
-    void ensureOpenTab();         // create an untitled tab if none are open
 
 protected:
     void closeEvent(QCloseEvent *event) override;

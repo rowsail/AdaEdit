@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
     // + active tab); window size and dock layout are restored in the ctor.
     if (!opened)
         w.restoreSession();
-    w.ensureOpenTab();          // fall back to a blank untitled tab if nothing opened
+    // No forced "untitled" tab -- an empty editor area is allowed (use File ▸ New).
     w.show();
     return app.exec();
 }
