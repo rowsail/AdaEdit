@@ -1972,15 +1972,44 @@ QString MainWindow::sdkTool(const QString &rel) const
 
 void MainWindow::newProject()
 {
-    // Type a name for the new project folder (created if it doesn't exist) -- a
-    // save-style dialog accepts a typed, not-yet-existing path, unlike
-    // getExistingDirectory which forces "New Folder" then select.
-    const QString start = m_project.rootPath.isEmpty() ? QDir::homePath() : m_project.rootPath;
-    QString dir = QFileDialog::getSaveFileName(
-        this, tr("New project — enter a folder name"), start, QString(), nullptr,
-        QFileDialog::ShowDirsOnly | QFileDialog::DontConfirmOverwrite);
-    if (dir.isEmpty()) return;                       // cancelled
-    dir = QDir::cleanPath(dir);
+    // Ask for a project name + location; the folder is created from them.  A
+    // small purpose-built dialog (rather than a file dialog) so typing a new,
+    // not-yet-existing name just works -- no "New Folder" / select dance.
+    const QString startLoc = QSettings().value("newProjectLocation",
+        m_project.rootPath.isEmpty() ? QDir::homePath()
+                                     : QFileInfo(m_project.rootPath).absolutePath()).toString();
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("New project"));
+    auto *nameEdit = new QLineEdit(&dlg);
+    nameEdit->setPlaceholderText(tr("my_project"));
+    auto *locEdit = new QLineEdit(startLoc, &dlg);
+    auto *browse = new QPushButton(tr("Browse…"), &dlg);
+    connect(browse, &QPushButton::clicked, &dlg, [&] {
+        const QString d = QFileDialog::getExistingDirectory(
+            &dlg, tr("Create the project in…"), locEdit->text(), QFileDialog::ShowDirsOnly);
+        if (!d.isEmpty()) locEdit->setText(d);
+    });
+    auto *locRow = new QHBoxLayout;
+    locRow->addWidget(locEdit, 1);
+    locRow->addWidget(browse);
+    auto *form = new QFormLayout;
+    form->addRow(tr("Project &name:"), nameEdit);
+    form->addRow(tr("Create &in:"), locRow);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("&Create"));
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    auto *lay = new QVBoxLayout(&dlg);
+    lay->addLayout(form);
+    lay->addWidget(buttons);
+    nameEdit->setFocus();
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const QString name = nameEdit->text().trimmed();
+    const QString loc  = locEdit->text().trimmed();
+    if (name.isEmpty() || loc.isEmpty()) return;
+    QSettings().setValue("newProjectLocation", loc);
+    const QString dir = QDir::cleanPath(QDir(loc).filePath(name));
 
     if (!QDir(dir).exists() && !QDir().mkpath(dir)) {
         QMessageBox::warning(this, tr("New project"),
