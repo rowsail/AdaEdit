@@ -17,7 +17,13 @@ int main(int argc, char *argv[])
     for (int s : {16, 22, 24, 32, 36, 48, 64, 128, 256, 512})
         icon.addFile(QStringLiteral(":/icons/adaedit-%1.png").arg(s));
     QApplication::setWindowIcon(icon);
-    QGuiApplication::setDesktopFileName(QStringLiteral("adaedit"));
+    // On X11 the title bar uses the window's _NET_WM_ICON (set above); setting a
+    // desktop-file name makes KWin's decoration switch to the THEMED icon instead
+    // (and a missing decoration size = blank title bar).  The taskbar maps the
+    // window via WM_CLASS -> the .desktop's StartupWMClass without it.  Wayland has
+    // no _NET_WM_ICON, so there it's required for any icon at all.
+    if (QGuiApplication::platformName().contains(QLatin1String("wayland")))
+        QGuiApplication::setDesktopFileName(QStringLiteral("adaedit"));
 
     MainWindow w;
     // A directory argument opens the project folder; files open in tabs.
