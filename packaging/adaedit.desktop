@@ -8,3 +8,4 @@ Icon=adaedit
 Categories=Development;IDE;TextEditor;
 Terminal=false
 MimeType=text/x-adasrc;
+StartupWMClass=adaedit
